@@ -12,7 +12,7 @@ import time
 # import spaces         # only for web demo
 
 from pi3.utils.geometry import se3_inverse, homogenize_points, depth_edge
-from pi3.models.pi3 import Pi3
+from pi3.models.pi3_sparse import Pi3_Sparse
 from pi3.utils.basic import load_images_as_tensor
 
 import trimesh
@@ -564,11 +564,9 @@ if __name__ == '__main__':
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print("Initializing and loading Pi3 model...")
+    print("Initializing and loading Sparse Pi3 model...")
 
-    model = Pi3.from_pretrained("yyfz233/Pi3")
-    # model = Pi3()
-    # model.load_state_dict(torcdtype = torch.bfloat16h.load('ckpts/pi3.pt', weights_only=False, map_location=device))
+    model = Pi3_Sparse.from_pretrained("weining17/Speed3R_Pi3")
 
     model.eval()
     model = model.to(device)
@@ -750,10 +748,7 @@ if __name__ == '__main__':
         </style>
                 
         <div class="intro-content">
-            <h1>🌌 <span class="pi-symbol">&pi;³</span>: Scalable Permutation-Equivariant Visual Geometry Learning</h1>
-            <p class="subtitle">
-                <a class="themed-link" href="">🐙 GitHub Repository</a> |
-                <a class="themed-link" href="#">🚀 Project Page</a>
+                <h1 align="center">Speed3R: <u>Sp</u>arse F<u>eed</u>-forward 3D Reconstruction Models</h1>            <p class="subtitle">
             </p>
             
             <p>Transform your videos or image collections into detailed 3D models. The <strong class="pi-symbol">&pi;³</strong> model processes your visual data to generate a rich 3D point cloud and calculate the corresponding camera perspectives.</p>

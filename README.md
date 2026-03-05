@@ -1,120 +1,67 @@
-<h1 align="center">🌌 <em>&pi;³</em>: Permutation-Equivariant Visual Geometry Learning</h1>
+<h1 align="center">Speed3R: <u>Sp</u>arse F<u>eed</u>-forward 3D Reconstruction Models</h1>
 
 <div align="center">
     <p>
-        <a href="https://github.com/yyfz">Yifan Wang</a><sup>1*</sup>&nbsp;&nbsp;
-        <a href="https://zhoutimemachine.github.io">Jianjun Zhou</a><sup>123*</sup>&nbsp;&nbsp;
-        <a href="https://www.haoyizhu.site">Haoyi Zhu</a><sup>1</sup>&nbsp;&nbsp;
-        <a href="https://github.com/AmberHeart">Wenzheng Chang</a><sup>1</sup>&nbsp;&nbsp;
-        <a href="https://github.com/yangzhou24">Yang Zhou</a><sup>1</sup>
-        <br>
-        <a href="https://github.com/LiZizun">Zizun Li</a><sup>1</sup>&nbsp;&nbsp;
-        <a href="https://github.com/SOTAMak1r">Junyi Chen</a><sup>1</sup>&nbsp;&nbsp;
-        <a href="https://oceanpang.github.io">Jiangmiao Pang</a><sup>1</sup>&nbsp;&nbsp;
-        <a href="https://cshen.github.io">Chunhua Shen</a><sup>2</sup>&nbsp;&nbsp;
-        <a href="https://tonghe90.github.io">Tong He</a><sup>13†</sup>
+        <a href="https://github.com/rwn17">Weining Ren</a><sup>1</sup>&nbsp;&nbsp;
+        <a href="https://tanxchong.github.io/">Xiao Tan</a><sup>2</sup>&nbsp;&nbsp;
+        <a href="https://www.kaihan.org/">Kai Han</a><sup>1</sup>&nbsp;&nbsp;
     </p>
     <p>
-        <sup>1</sup>Shanghai AI Lab &nbsp;&nbsp;&nbsp;
-        <sup>2</sup>ZJU &nbsp;&nbsp;&nbsp;
-        <sup>3</sup>SII
-    </p>
-    <p>
-        <sup>*</sup> Equal Contribution &nbsp;&nbsp;&nbsp;
-        <sup>†</sup> Corresponding Author
+        <sup>1</sup>The University of Hong Kong &nbsp;&nbsp;&nbsp;
+        <sup>2</sup>Baidu AMU &nbsp;&nbsp;&nbsp;
     </p>
 </div>
 
 <p align="center">
-    <a href="https://arxiv.org/abs/2507.13347" target="_blank">
+    <a href="https://arxiv.org/abs/" target="_blank">
     <img src="https://img.shields.io/badge/Paper-00AEEF?style=plastic&logo=arxiv&logoColor=white" alt="Paper">
     </a>
-    <a href="https://yyfz.github.io/pi3/" target="_blank">
+    <a href="https://visual-ai.github.io/speed3r/" target="_blank">
     <img src="https://img.shields.io/badge/Project Page-F78100?style=plastic&logo=google-chrome&logoColor=white" alt="Project Page">
-    </a>
-    <a href="https://huggingface.co/spaces/yyfz233/Pi3" target="_blank">
-    <img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Demo-blue" alt="Hugging Face Demo">
     </a>
 </p>
 
 <div align="center">
     <a href="[PROJECT_PAGE_LINK_HERE]">
-        <img src="assets/main.png" width="90%">
+        <img src="assets/pipeline.png" width="90%">
     </a>
     <p>
-        <i>&pi;³ reconstructs visual geometry without a fixed reference view, achieving robust, state-of-the-art performance.</i>
+        <i>Speed3R accelerate VGGT and &pi;³ with trainable sparse attention</i>
     </p>
 </div>
 
 
 ## 📣 Updates
-* **[December 28, 2025]** 🚀 **Pi3X Released!** We have upgraded the model to **Pi3X**. This improved version eliminates grid artifacts (smoother point clouds), offers more precise confidence scoring, supports **conditional injection** (camera pose, intrinsics, depth), and enables **approximate metric scale** reconstruction.
-* **[September 3, 2025]** ⭐️ Training code is updated! See [`training`](https://github.com/yyfz/Pi3/tree/training) branch for details.
-* **[July 29, 2025]** 📈 Evaluation code is released! See [`evaluation`](https://github.com/yyfz/Pi3/tree/evaluation) branch for details.
-* **[July 16, 2025]** 🚀 Hugging Face Demo and inference code are released!
+* **[March 6, 2026]** Initial Release
 
 
 ## ✨ Overview
-We introduce $\pi^3$, a novel feed-forward neural network that revolutionizes visual geometry reconstruction by **eliminating the need for a fixed reference view**. Traditional methods, which rely on a designated reference frame, are often prone to instability and failure if the reference is suboptimal.
+While recent feed-forward 3D reconstruction models accelerate 3D reconstruction by jointly inferring dense geometry and camera poses in a single pass, their reliance on dense attention imposes a quadratic complexity, creating a computational bottleneck that severely limits inference speed. 
 
-In contrast, $\pi^3$ employs a fully **permutation-equivariant** architecture. This allows it to directly predict affine-invariant camera poses and scale-invariant local point maps from an unordered set of images, breaking free from the constraints of a reference frame. This design makes our model inherently **robust to input orderi
+To resolve this, we introduce Speed3R, an end-to-end trainable model inspired by the core principle of Structure-from-Motion that a sparse set of keypoints is sufficient for robust estimation. Speed3R features a dual-branch attention mechanism where the compression branch creates a coarse contextual prior to guide the selection branch, which performs fine-grained attention only on the most informative image tokens. This strategy mimics the efficiency of traditional keypoint matching, achieving a remarkable 12.4x inference speedup on 1000-view sequences, while introducing a minimal, controlled trade-off in accuracy. Validated on standard benchmarks with both VGGT and &pi;³ backbones, our method delivers high-quality reconstructions at a fraction of computational cost, paving the way for efficient large-scale scene modeling.
 
-A key emergent property of our simple, bias-free design is the learning of a dense and structured latent representation of the camera pose manifold. Without complex priors or training schemes, $\pi^3$ achieves **state-of-the-art performance** 🏆 on a wide range of tasks, including camera pose estimation, monocular/video depth estimation, and dense point map estimation.
-
-### Introducing Pi3X (Engineering Update)
-Building upon the original framework, we present **Pi3X**, an enhanced version focused on flexibility and reconstruction quality:
-* **Smoother Reconstruction:** We replaced the original output head with a **Convolutional Head**, significantly reducing grid-like artifacts and producing much smoother point clouds.
-* **Flexible Conditioning:** Pi3X supports the optional injection of **camera poses, intrinsics, and depth**. This allows for more controlled reconstruction when partial priors are available.
-* **Reliable Confidence:** We improved how confidence is learned. Instead of approximating a binary mask, the model now predicts continuous quality levels, making the confidence scores significantly more reliable for filtering noise.
-* **Metric Scale:** The model now supports **metric scale reconstruction** (approximate), moving beyond purely scale-invariant predictions.
-
-Overall, Pi3X offers slightly better reconstruction quality than the original $\pi^3$ while supporting a wider range of modal inputs.
 
 ## 🚀 Quick Start
 
 ### 1. Clone & Install Dependencies
 First, clone the repository and install the required packages.
 ```bash
-git clone https://github.com/yyfz/Pi3.git
-cd Pi3
+git clone https://github.com/Visual-AI/speed3r.git
+cd speed3r
 pip install -r requirements.txt
+pip install triton==3.3.1
 ```
 
 ### 2\. Run Inference from Command Line
 
 Try our example inference script. You can run it on a directory of images or a video file.
 
-If the automatic download from Hugging Face is slow, you can download the model checkpoint manually from [Pi3](https://huggingface.co/yyfz233/Pi3/resolve/main/model.safetensors) or [Pi3X](https://huggingface.co/yyfz233/Pi3X/resolve/main/model.safetensors) and specify its local path using the `--ckpt` argument.
+If the automatic download from Hugging Face is slow, you can download the model checkpoint manually from [Speed3R_Pi3](https://huggingface.co/weining17/Speed3R_Pi3/tree/main/model.safetensors) and specify its local path using the `--ckpt` argument.
 
 ```bash
 # Run with the default example video
-# python example.py    # Inference with Pi3 (Original)
-python example_mm.py   # [New] Inference with Pi3X (Recommended)
-
-# Run on your own data (image folder or .mp4 file)
-# python example.py --data_path <path/to/data>     # Pi3
-python example_mm.py --data_path <path/to/data>    # Pi3X
+python example.py
 ```
-
-### Advanced: Multimodal Conditioning (Pi3X Only)
-To utilize additional input modalities (e.g., camera poses, intrinsics, or depth), please refer to example_mm.py for specific data formatting details.
-
-Below is an example comparing reconstruction with and without condition injection. You can compare the resulting point clouds to observe the improvements brought by multimodal inputs.
-``` bash
-# 1. Inference WITH conditioning (poses, intrinsics, etc.)
-python example_mm.py --data_path examples/room/rgb --conditions_path examples/room/condition.npz --save_path examples/room_with_conditions.ply
-
-# 2. Inference WITHOUT conditioning (image only)
-python example_mm.py --data_path examples/room/rgb --save_path examples/room_no_conditions.ply
-```
-
-**Optional Arguments:**
-
-  * `--data_path`: Path to the input image directory or a video file. (Default: `examples/skating.mp4`)
-  * `--save_path`: Path to save the output `.ply` point cloud. (Default: `examples/result.ply`)
-  * `--interval`: Frame sampling interval. (Default: `1` for images, `10` for video)
-  * `--ckpt`: Path to a custom model checkpoint file.
-  * `--device`: Device to run inference on. (Default: `cuda`)
 
 ### 3\. Run with Gradio Demo
 
@@ -148,15 +95,13 @@ Here is a minimal example of how to run the model on a batch of images.
 
 ```python
 import torch
-# from pi3.models.pi3 import Pi3            # old version
-from pi3.models.pi3x import Pi3X            # new version (Recommended)
+from pi3.models.pi3_sparse import Pi3_Sparse
 from pi3.utils.basic import load_images_as_tensor # Assuming you have a helper function
 
 # --- Setup ---
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-# model = Pi3.from_pretrained("yyfz233/Pi3").to(device).eval()
-model = Pi3X.from_pretrained("yyfz233/Pi3X").to(device).eval()
-# or download checkpoints from `https://huggingface.co/yyfz233/Pi3/resolve/main/model.safetensors`
+model = Pi3_Sparse.from_pretrained("weining17/Speed3R_Pi3").to(device).eval()
+# or download checkpoints from `https://huggingface.co/weining17/Speed3R_Pi3/tree/main/model.safetensors`
 
 # --- Load Data ---
 # Load a sequence of N images into a tensor
@@ -178,6 +123,16 @@ print("Reconstruction complete!")
 # Access outputs: results['points'], results['camera_poses'] and results['local_points'].
 ```
 
+## TODOs
+- [ ] Release Speed3R-VGGT code & ckpt
+- [ ] Release the training 
+
+## Notice
+1. Currently, the model only supports resolutions that are multiples of 56 rather than 14.
+2. We test the method with triton version 3.3.1, lower version may cause numerical error.
+3. Curently the kernel only support bf16/fp16.
+
+
 
 ## 🙏 Acknowledgements
 
@@ -186,6 +141,20 @@ Our work builds upon several fantastic open-source projects. We'd like to expres
   * [DUSt3R](https://github.com/naver/dust3r)
   * [CUT3R](https://github.com/CUT3R/CUT3R)
   * [VGGT](https://github.com/facebookresearch/vggt)
+  * [Pi3](https://yyfz.github.io/pi3/)
+  * [NSA](https://arxiv.org/abs/2502.11089)
+  * [NSA Implementation](https://github.com/XunhaoLai/native-sparse-attention-triton)
+
+
+## Excellent Concurrent Works Accelerating VGGT
+  * [FastVGGT](https://github.com/mystorm16/FastVGGT)
+  * [FasterVGGT](https://github.com/brianwang00001/sparse-vggt)
+  * [FlashVGGT](https://arxiv.org/abs/2512.04939)
+  * [CO-Me](https://co-me-tokens.github.io/)
+  * [AVGGT](https://arxiv.org/abs/2512.02541)
+  * [LiteVGGT](https://arxiv.org/pdf/2512.21691)
+  * [Attetion Collapse Analysis](https://arxiv.org/pdf/2512.21691)
+
 
 
 ## 📜 Citation
@@ -193,11 +162,11 @@ Our work builds upon several fantastic open-source projects. We'd like to expres
 If you find our work useful, please consider citing:
 
 ```bibtex
-@article{wang2025pi,
-  title={$$\backslash$pi\^{} 3$: Permutation-Equivariant Visual Geometry Learning},
-  author={Wang, Yifan and Zhou, Jianjun and Zhu, Haoyi and Chang, Wenzheng and Zhou, Yang and Li, Zizun and Chen, Junyi and Pang, Jiangmiao and Shen, Chunhua and He, Tong},
-  journal={arXiv preprint arXiv:2507.13347},
-  year={2025}
+@article{ren2026speed3r,
+    title={Speed3R: Sparse Feed-forward 3D Reconstruction Models},
+    author={Ren, Weining and Tan, Xiao and Han, Kai},
+    journal={arXiv preprint arXiv:xxxxxxx},
+    year={2026}
 }
 ```
 
@@ -205,11 +174,11 @@ If you find our work useful, please consider citing:
 
 
 ## 📄 License
-This project adopts a dual-licensing strategy:
+This project adopts a dual-licensing strategy following Pi3:
 
 | Component | License | Commercial Use |
 | :--- | :--- | :--- |
 | **Code** (Scripts, Tools, Logic) | [BSD 3-Clause](LICENSE) | **Permitted** |
-| **Model Weights** (Pi3 and Pi3X Weights) | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) | **Strictly Non-Commercial** |
+| **Model Weights** (Pi3 Weights) | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) | **Strictly Non-Commercial** |
 
 **Note on Model Weights:** Due to the nature of the training datasets, the model weights are restricted to non-commercial research and educational purposes only. Redistribution of the weights must maintain this restriction.

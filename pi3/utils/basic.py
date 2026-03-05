@@ -8,7 +8,7 @@ from torchvision import transforms
 from plyfile import PlyData, PlyElement
 import numpy as np
 
-def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, verbose=True):
+def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, verbose=True, round_patch=56):
     """
     Loads images from a directory or video, resizes them to a uniform size,
     then converts and stacks them into a single [N, 3, H, W] PyTorch tensor.
@@ -58,13 +58,13 @@ def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, ver
     W_orig, H_orig = first_img.size
     scale = math.sqrt(PIXEL_LIMIT / (W_orig * H_orig)) if W_orig * H_orig > 0 else 1
     W_target, H_target = W_orig * scale, H_orig * scale
-    k, m = round(W_target / 14), round(H_target / 14)
-    while (k * 14) * (m * 14) > PIXEL_LIMIT:
+    k, m = round(W_target / round_patch), round(H_target / round_patch)
+    while (k * round_patch) * (m * round_patch) > PIXEL_LIMIT:
         if k / m > W_target / H_target:
             k -= 1
         else:
             m -= 1
-    TARGET_W, TARGET_H = max(1, k) * 14, max(1, m) * 14
+    TARGET_W, TARGET_H = max(1, k) * round_patch, max(1, m) * round_patch
     if verbose:
         print(f"All images will be resized to a uniform size: ({TARGET_W}, {TARGET_H})")
 

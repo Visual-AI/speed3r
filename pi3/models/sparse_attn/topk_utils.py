@@ -1,0 +1,559 @@
+from __future__ import annotations
+
+from triton.language import core
+from triton.language import math
+import triton
+
+# constexpr utilities
+
+
+@triton.jit
+def get_topmask_and_fullmask(x):
+    triton.language.static_assert(x.dtype.is_int_unsigned(), "floating-point value must be passed as bits")
+    tm: triton.language.constexpr = 1 << (-1 + x.dtype.primitive_bitwidth)
+    fm: triton.language.constexpr = (1 << x.dtype.primitive_bitwidth) - 1
+    tm_arr = triton.language.full(x.shape, tm, dtype=x.dtype)
+    fm_arr = triton.language.full(x.shape, fm, dtype=x.dtype)
+    return tm_arr, fm_arr
+
+@triton.jit
+def fpval_to_key(x):
+    """Converts a float's bit representation to a sortable integer key."""
+    tm, fm = get_topmask_and_fullmask(x)
+    return x ^ triton.language.where((x & tm) != 0, fm, tm)
+
+@triton.jit
+def key_to_fpval(x):
+    """Converts a sortable integer key back to a float's bit representation."""
+    tm, fm = get_topmask_and_fullmask(x)
+    return x ^ triton.language.where((x & tm) == 0, fm, tm)
+
+@triton.jit
+def indx_to_key(indx, N_COLS_PAD: triton.language.constexpr):
+    return N_COLS_PAD - indx
+
+@triton.jit
+def key_to_indx(key, N_COLS_PAD: triton.language.constexpr):
+    return N_COLS_PAD - key
+
+
+# def triton.language.standard._log2(i: core.constexpr):
+#     log2 = 0
+#     n = core.constexpr(i).value
+#     while n > 1:
+#         n >>= 1
+#         log2 += 1
+#     return core.constexpr(log2)
+
+@triton.jit
+def _is_power_of_two(i: core.constexpr):
+    n = i.value
+    return core.constexpr((n & (n - 1)) == 0 and n != 0)
+
+
+@core._tensor_member_fn
+@triton.jit
+@math._add_math_1arg_docstr("softmax")
+def softmax(x, dim=None, keep_dims=False, ieee_rounding=False):
+    if dim is None:
+        _dim: core.constexpr = 0
+    else:
+        _dim: core.constexpr = dim
+    z = x - max(x, _dim, keep_dims=keep_dims)
+    num = math.exp(z)
+    den = sum(num, _dim, keep_dims=keep_dims)
+    return math.fdiv(num, den, ieee_rounding)
+
+
+@core._tensor_member_fn
+@triton.jit
+def ravel(x, can_reorder=False):
+    """
+    Returns a contiguous flattened view of :code:`x`.
+
+    :param x: the input tensor
+    :type x: Block
+    """
+    return core.reshape(x, [x.numel], can_reorder=can_reorder)
+
+
+@triton.jit
+def zeros(shape, dtype):
+    """
+    Returns a tensor filled with the scalar value 0 for the given :code:`shape` and :code:`dtype`.
+
+    :param shape: Shape of the new array, e.g., (8, 16) or (8, )
+    :type shape: tuple of ints
+    :param dtype: Data-type of the new array, e.g., :code:`triton.language.float16`
+    :type dtype: DType
+    """
+    return core.full(shape, 0, dtype)
+
+
+@triton.jit
+def zeros_like(input):
+    """
+    Returns a tensor of zeros with the same shape and type as a given tensor.
+
+    :param input: input tensor
+    :type input: Tensor
+    """
+    return zeros(input.shape, input.dtype)
+
+
+# max and argmax
+
+
+@triton.jit
+def _argmax_combine(value1, index1, value2, index2, tie_break_left):
+    if tie_break_left:
+        tie = value1 == value2 and index1 < index2
+    else:
+        tie = False
+    gt = value1 > value2 or tie
+    v_ret = core.where(gt, value1, value2)
+    i_ret = core.where(gt, index1, index2)
+    return v_ret, i_ret
+
+
+@triton.jit
+def _argmax_combine_tie_break_left(value1, index1, value2, index2):
+    return _argmax_combine(value1, index1, value2, index2, True)
+
+
+@triton.jit
+def _argmax_combine_tie_break_fast(value1, index1, value2, index2):
+    return _argmax_combine(value1, index1, value2, index2, False)
+
+
+@triton.jit
+def _elementwise_max(a, b):
+    return core.maximum(a, b)
+
+
+@core._tensor_member_fn
+@triton.jit
+@core._add_reduction_docstr("maximum", return_indices_arg="return_indices",
+                            tie_break_arg="return_indices_tie_break_left")
+def max(input, axis=None, return_indices=False, return_indices_tie_break_left=True, keep_dims=False):
+    input = core._promote_bfloat16_to_float32(input)
+    if return_indices:
+        if return_indices_tie_break_left:
+            return core._reduce_with_indices(input, axis, _argmax_combine_tie_break_left, keep_dims=keep_dims)
+        else:
+            return core._reduce_with_indices(input, axis, _argmax_combine_tie_break_fast, keep_dims=keep_dims)
+    else:
+        if core.constexpr(input.dtype.primitive_bitwidth) < core.constexpr(32):
+            if core.constexpr(input.dtype.is_floating()):
+                input = input.to(core.float32)
+            else:
+                assert input.dtype.is_int(), "Expecting input to be integer type"
+                input = input.to(core.int32)
+        return core.reduce(input, axis, _elementwise_max, keep_dims=keep_dims)
+
+
+@core._tensor_member_fn
+@triton.jit
+@core._add_reduction_docstr("maximum index", tie_break_arg="tie_break_left")
+def argmax(input, axis, tie_break_left=True, keep_dims=False):
+    (_, ret) = max(input, axis, return_indices=True, return_indices_tie_break_left=tie_break_left, keep_dims=keep_dims)
+    return ret
+
+
+# min and argmin
+
+
+@triton.jit
+def _argmin_combine(value1, index1, value2, index2, tie_break_left):
+    if tie_break_left:
+        tie = value1 == value2 and index1 < index2
+    else:
+        tie = False
+    lt = value1 < value2 or tie
+    value_ret = core.where(lt, value1, value2)
+    index_ret = core.where(lt, index1, index2)
+    return value_ret, index_ret
+
+
+@triton.jit
+def _argmin_combine_tie_break_left(value1, index1, value2, index2):
+    return _argmin_combine(value1, index1, value2, index2, True)
+
+
+@triton.jit
+def _argmin_combine_tie_break_fast(value1, index1, value2, index2):
+    return _argmin_combine(value1, index1, value2, index2, False)
+
+
+@triton.jit
+def _elementwise_min(a, b):
+    return core.minimum(a, b)
+
+
+@core._tensor_member_fn
+@triton.jit
+@core._add_reduction_docstr("minimum", return_indices_arg="return_indices",
+                            tie_break_arg="return_indices_tie_break_left")
+def min(input, axis=None, return_indices=False, return_indices_tie_break_left=True, keep_dims=False):
+    input = core._promote_bfloat16_to_float32(input)
+    if return_indices:
+        if return_indices_tie_break_left:
+            return core._reduce_with_indices(input, axis, _argmin_combine_tie_break_left, keep_dims=keep_dims)
+        else:
+            return core._reduce_with_indices(input, axis, _argmin_combine_tie_break_fast, keep_dims=keep_dims)
+    else:
+        if core.constexpr(input.dtype.primitive_bitwidth) < 32:
+            if core.constexpr(input.dtype.is_floating()):
+                input = input.to(core.float32)
+            else:
+                assert input.dtype.is_int(), "Expecting input to be integer type"
+                input = input.to(core.int32)
+        return core.reduce(input, axis, _elementwise_min, keep_dims=keep_dims)
+
+
+@core._tensor_member_fn
+@triton.jit
+@core._add_reduction_docstr("minimum index", tie_break_arg="tie_break_left")
+def argmin(input, axis, tie_break_left=True, keep_dims=False):
+    _, ret = min(input, axis, return_indices=True, return_indices_tie_break_left=tie_break_left, keep_dims=keep_dims)
+    return ret
+
+
+@triton.jit
+def _sum_combine(a, b):
+    return a + b
+
+
+# sum
+def _pick_sum_dtype(in_dtype: core.constexpr, dtype: core.constexpr):
+    dtype = core._unwrap_if_constexpr(dtype)
+    if dtype is not None:
+        return dtype
+
+    # For integer bitwidths less than 32, pick int32 with the same sign to
+    # avoid overflow.
+    out_dtype = None
+    if in_dtype.is_int_signed():
+        out_dtype = core.int32 if in_dtype.int_bitwidth < 32 else None
+    elif in_dtype.is_int_unsigned():
+        out_dtype = core.uint32 if in_dtype.int_bitwidth < 32 else None
+    return out_dtype
+
+
+# @core._tensor_member_fn
+# @triton.jit
+# @core._add_reduction_docstr("sum", dtype_arg="dtype")
+# def sum(input, axis=None, keep_dims=False, dtype: core.constexpr = None):
+#     # Pick a default dtype for the reduction if one was not specified.
+#     out_dtype: core.constexpr = _pick_sum_dtype(input.dtype, dtype)
+
+#     if out_dtype is not None:
+#         input = input.to(out_dtype)
+#     return core.reduce(input, axis, _sum_combine, keep_dims=keep_dims)
+
+
+@triton.jit
+def _xor_combine(a, b):
+    return a ^ b
+
+
+# xor sum
+
+
+@core._tensor_member_fn
+@triton.jit
+@core._add_reduction_docstr("xor sum")
+def xor_sum(input, axis=None, keep_dims=False):
+    core.static_assert(input.type.scalar.is_int(), "xor_sum only supported for integers")
+    return core.reduce(input, axis, _xor_combine, keep_dims=keep_dims)
+
+
+# or reduction
+
+
+@triton.jit
+def _or_combine(x, y):
+    return x | y
+
+
+@core._tensor_member_fn
+@triton.jit
+@core._add_reduction_docstr("reduce_of")
+def reduce_or(input, axis, keep_dims=False):
+    core.static_assert(input.type.scalar.is_int(), "reduce_of only supported for integers")
+    return core.reduce(input, axis, _or_combine, keep_dims=keep_dims)
+
+
+# sort
+
+
+@triton.jit
+def _indicator(n_dims: core.constexpr, j: core.constexpr):
+    ar = core.arange(0, 2)
+    ar = core.reshape(ar, [1] * (n_dims - j - 1) + [2] + [1] * j)
+    return ar
+
+
+@triton.jit
+def _compare_and_swap(x, flip, i: core.constexpr):
+    # compare-and-swap on the ith *innermost* dimension
+    n_dims: core.constexpr = triton.language.standard._log2(x.numel)
+
+    # flip along middle dimension (the bitwise XORs will be optimised away):
+    idtype = core.get_int_dtype(bitwidth=x.dtype.primitive_bitwidth, signed=True)
+    ix = x.to(idtype, bitcast=True)
+    iy = ix ^ xor_sum(ix, n_dims - 1 - i, True)
+    y = iy.to(x.dtype, bitcast=True)
+
+    # determines whether we are in the right (rather than left) position along the axis:
+    is_right = _indicator(n_dims, i)
+
+    # conditional swap:
+    ret = core.where((x > y) != (flip ^ is_right), y, x)
+    return ret
+
+@triton.jit
+def _compare_and_swap_ind(x, ind, flip, i: core.constexpr):
+    # compare-and-swap on the ith *innermost* dimension
+    n_dims: core.constexpr = triton.language.standard._log2(x.numel)
+
+    # flip along middle dimension (the bitwise XORs will be optimised away):
+    idtype = core.get_int_dtype(bitwidth=x.dtype.primitive_bitwidth, signed=True)
+    ix = x.to(idtype, bitcast=True)
+    iy = ix ^ xor_sum(ix, n_dims - 1 - i, True)
+    y = iy.to(x.dtype, bitcast=True)
+
+    # create indices for left and right halves:
+    ind_y = ind ^ xor_sum(ind, n_dims - 1 - i, True)
+
+    # determines whether we are in the right (rather than left) position along the axis:
+    is_right = _indicator(n_dims, i)
+    swap_cond = (x > y) != (flip ^ is_right)
+
+    # conditional swap:
+    ret = core.where(swap_cond, y, x)
+    new_ids = core.where(swap_cond, ind_y, ind)
+
+    return ret, new_ids
+
+
+@triton.jit
+def _bitonic_merge_hypercube_ind(x, ind,stage: core.constexpr, order: core.constexpr):
+    '''
+    order_type 0 == ascending
+    order_type 1 == descending
+    order_type 2 == alternating
+    '''
+    # flip denotes whether to re-arrange sub-sequences of elements in ascending or
+    # descending order.
+    # if flip = 00000000... then all elements will be re-arranged ascendingly at this stage
+    # if flip = 00110011... then all the elements will be re-arranged alternatingly (with
+    # a stride of 2) at this stage
+    if order == 2:
+        flip = _indicator(triton.language.standard._log2(x.numel), stage)
+    else:
+        flip = order
+    # perform `stage` rounds of `compare-and-swap`
+    for i in core.static_range(stage):
+        x, ind = _compare_and_swap_ind(x, ind,flip, stage - 1 - i)
+    return x, ind
+
+@triton.jit
+def _bitonic_merge_hypercube(x, stage: core.constexpr, order: core.constexpr):
+    '''
+    order_type 0 == ascending
+    order_type 1 == descending
+    order_type 2 == alternating
+    '''
+    # flip denotes whether to re-arrange sub-sequences of elements in ascending or
+    # descending order.
+    # if flip = 00000000... then all elements will be re-arranged ascendingly at this stage
+    # if flip = 00110011... then all the elements will be re-arranged alternatingly (with
+    # a stride of 2) at this stage
+    if order == 2:
+        flip = _indicator(triton.language.standard._log2(x.numel), stage)
+    else:
+        flip = order
+    # perform `stage` rounds of `compare-and-swap`
+    for i in core.static_range(stage):
+        x = _compare_and_swap(x, flip, stage - 1 - i)
+    return x
+
+
+
+
+@triton.jit
+def _bitonic_merge(x, stage: core.constexpr, order: core.constexpr, n_dims: core.constexpr):
+    h = core.reshape(x, [2] * triton.language.standard._log2(x.numel))
+    h = _bitonic_merge_hypercube(h, stage, order)
+    x = core.reshape(h, x.shape)
+    return x
+
+
+
+@triton.jit
+def sort_impl_ind(x, ind, k: core.constexpr = None, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0, return_ind = core.CONSTEXPR_0):
+    """
+    Sorts a tensor along a specified dimension.
+
+    :param x: The input tensor to be sorted.
+    :type x: Tensor
+    :param dim: The dimension along which to sort the tensor. If None, the tensor is sorted along the last dimension. Currently, only sorting along the last dimension is supported.
+    :type dim: int, optional
+    :param k: the number of top elements to select. If none, assume k = x.shape[dim]
+    :type k: int, optional
+    :param descending: If set to True, the tensor is sorted in descending order. If set to False, the tensor is sorted in ascending order.
+    :type descending: bool, optional
+    """
+    # handle default dimension or check that it is the most minor dim
+    _dim: core.constexpr = len(x.shape) - 1 if dim is None else dim
+    core.static_assert(_dim == len(x.shape) - 1, "only minor dimension is currently supported")
+
+    log_n: core.constexpr = triton.language.standard._log2(x.shape[_dim])
+    log_k: core.constexpr = log_n if k is None else triton.language.standard._log2(k)
+
+    n_dims: core.constexpr = triton.language.standard._log2(x.numel)
+
+    # reshape to hypercube:
+    h = core.reshape(x, [2] * n_dims)
+    h_ind = core.reshape(ind, [2] * n_dims)
+    # h_ind = core.reshape()
+
+    # run first log_k bitonic sort iterations:
+    for i in core.static_range(1, log_k + 1):
+        h, h_ind = _bitonic_merge_hypercube_ind(h, h_ind, i, 2 if i < log_n else descending)
+
+    # select top k elements using bitonic top-k
+    # https://www.doc.ic.ac.uk/~hlgr/pdfs/MassivelyParallelTopK.pdf
+    for i in core.static_range(log_k + 1, log_n + 1):
+        h = max(h, axis=(triton.language.standard._log2(h.numel) - 1 - log_k)) if descending else min(h, axis=(triton.language.standard._log2(h.numel) - 1 - log_k))
+        h, h_ind = _bitonic_merge_hypercube_ind(h, h_ind, log_k, 2 if i < log_n else descending)
+
+    # reshape back:
+    x = core.reshape(h, x.shape[:-1] + [2**log_k])
+    return x, x
+
+
+
+@triton.jit
+def sort_impl(x, k: core.constexpr = None, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0, return_ind = core.CONSTEXPR_0):
+    """
+    Sorts a tensor along a specified dimension.
+
+    :param x: The input tensor to be sorted.
+    :type x: Tensor
+    :param dim: The dimension along which to sort the tensor. If None, the tensor is sorted along the last dimension. Currently, only sorting along the last dimension is supported.
+    :type dim: int, optional
+    :param k: the number of top elements to select. If none, assume k = x.shape[dim]
+    :type k: int, optional
+    :param descending: If set to True, the tensor is sorted in descending order. If set to False, the tensor is sorted in ascending order.
+    :type descending: bool, optional
+    """
+    # handle default dimension or check that it is the most minor dim
+    _dim: core.constexpr = len(x.shape) - 1 if dim is None else dim
+    core.static_assert(_dim == len(x.shape) - 1, "only minor dimension is currently supported")
+
+    log_n: core.constexpr = triton.language.standard._log2(x.shape[_dim])
+    log_k: core.constexpr = log_n if k is None else triton.language.standard._log2(k)
+
+    n_dims: core.constexpr = triton.language.standard._log2(x.numel)
+
+    # reshape to hypercube:
+    h = core.reshape(x, [2] * n_dims)
+    # h_ind = core.reshape()
+
+    # run first log_k bitonic sort iterations:
+    for i in core.static_range(1, log_k + 1):
+        h = _bitonic_merge_hypercube(h, i, 2 if i < log_n else descending)
+
+    # select top k elements using bitonic top-k
+    # https://www.doc.ic.ac.uk/~hlgr/pdfs/MassivelyParallelTopK.pdf
+    for i in core.static_range(log_k + 1, log_n + 1):
+        h = max(h, axis=(triton.language.standard._log2(h.numel) - 1 - log_k)) if descending else min(h, axis=(triton.language.standard._log2(h.numel) - 1 - log_k))
+        h = _bitonic_merge_hypercube(h, log_k, 2 if i < log_n else descending)
+
+    # reshape back:
+    x = core.reshape(h, x.shape[:-1] + [2**log_k])
+    return x
+
+
+@triton.jit
+def sort(x, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0):
+    return sort_impl(x, dim=dim, descending=descending)
+
+
+@triton.jit
+def topk(x, k: core.constexpr, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0):
+    return sort_impl(x, k=k, dim=dim, descending=descending)
+
+
+@triton.jit
+def topk_ind(x, ind, k: core.constexpr, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0):
+    return sort_impl_ind(x, ind, k=k, dim=dim, descending=descending)
+
+
+@triton.jit
+def bitonic_merge(x, dim: core.constexpr = None, descending: core.constexpr = core.CONSTEXPR_0):
+    # handle default dimension or check that it is the most minor dim
+    _dim: core.constexpr = len(x.shape) - 1 if dim is None else dim
+    core.static_assert(_dim == len(x.shape) - 1, "only minor dimension is currently supported")
+    n_dims: core.constexpr = triton.language.standard._log2(x.shape[-1])
+    return _bitonic_merge(x, n_dims, descending, n_dims)
+
+
+def _get_flip_dim(dim, shape):
+    dim = core._unwrap_if_constexpr(dim)
+    shape = core._unwrap_if_constexpr(shape)
+    if dim is None:
+        dim = len(shape) - 1
+    if dim < 0:  # flip doesn't work if dim < 0 because the xor-swap for loop will start/end at the wrong index
+        dim += len(shape)
+    return core.constexpr(dim)
+
+
+@core._tensor_member_fn
+@triton.jit
+def flip(x, dim=None):
+    """
+    Flips a tensor `x` along the dimension `dim`.
+
+    :param x: the first input tensor
+    :type x: Block
+    :param dim: the dimension to flip along
+    :type dim: int
+    """
+    core.static_assert(-len(x.shape) <= dim and dim < len(x.shape))
+    _dim: core.constexpr = _get_flip_dim(dim, x.shape)
+    core.static_assert(_is_power_of_two(x.shape[_dim]))
+    steps: core.constexpr = triton.language.standard._log2(x.shape[_dim])
+
+    # reshape the swap dimension to (2, 2, ..., 2)
+    idtype = core.get_int_dtype(bitwidth=x.dtype.primitive_bitwidth, signed=True)
+    y = core.reshape(x.to(idtype, bitcast=True), x.shape[:_dim] + [2] * steps + x.shape[_dim + 1:])
+    for i in core.static_range(steps):
+        y = y ^ xor_sum(y, _dim + i, True)
+    x = core.reshape(y, x.shape).to(x.dtype, bitcast=True)
+    return x
+
+
+@triton.jit
+def interleave(a, b):
+    """
+    Interleaves the values of two tensors along their last dimension. The two tensors must have the same shape.
+    Equivalent to `triton.language.join(a, b).reshape(a.shape[:-1] + [2 * a.shape[-1]])`
+
+    :param a: The first input tensor.
+    :type a: Tensor
+    :param b: The second input tensor.
+    :type b: Tensor
+    """
+    c = core.join(a, b)
+
+    if len(c.shape) == 1:
+        # We must have interleaved two scalars.
+        return c
+    else:
+        # This `else` is necessary because Triton's AST parser doesn't
+        # understand that if we take the `if` above we definitely don't run this
+        # `else`.
+        return core.reshape(c, c.shape[:-2] + [2 * c.shape[-2]])

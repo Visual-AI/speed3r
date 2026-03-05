@@ -1,8 +1,10 @@
 import torch
 import argparse
+import time
 from pi3.utils.basic import load_images_as_tensor, write_ply
 from pi3.utils.geometry import depth_edge
-from pi3.models.pi3 import Pi3
+import os
+from pi3.models.pi3_sparse import Pi3_Sparse
 
 if __name__ == '__main__':
     # --- Argument Parsing ---
@@ -27,36 +29,41 @@ if __name__ == '__main__':
     # 1. Prepare model
     print(f"Loading model...")
     device = torch.device(args.device)
-    if args.ckpt is not None:
-        model = Pi3().to(device).eval()
-        if args.ckpt.endswith('.safetensors'):
-            from safetensors.torch import load_file
-            weight = load_file(args.ckpt)
-        else:
-            weight = torch.load(args.ckpt, map_location=device, weights_only=False)
-        
-        model.load_state_dict(weight)
-    else:
-        model = Pi3.from_pretrained("yyfz233/Pi3").to(device).eval()
-        # or download checkpoints from `https://huggingface.co/yyfz233/Pi3/resolve/main/model.safetensors`, and `--ckpt ckpts/model.safetensors`
+    model = Pi3_Sparse.from_pretrained("weining17/Speed3R_Pi3").to(device).eval()
 
     # 2. Prepare input data
     # The load_images_as_tensor function will print the loading path
-    imgs = load_images_as_tensor(args.data_path, interval=args.interval).to(device) # (N, 3, H, W)
+    imgs = load_images_as_tensor(args.data_path, interval=args.interval, round_patch=56).to(device) # (N, 3, H, W)
 
     # 3. Infer
     print("Running model inference...")
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    start_time = time.perf_counter()
     with torch.no_grad():
         with torch.amp.autocast('cuda', dtype=dtype):
             res = model(imgs[None]) # Add batch dimension
 
     # 4. process mask
-    masks = torch.sigmoid(res['conf'][..., 0]) > 0.1
+    masks = torch.sigmoid(res['conf'][..., 0]) > 0.2
     non_edge = ~depth_edge(res['local_points'][..., 2], rtol=0.03)
     masks = torch.logical_and(masks, non_edge)[0]
 
+    points = res['points'][0][masks]
+    colors = imgs.permute(0, 2, 3, 1)[masks]
+
+    max_points = 1_000_000
+    num_points = points.shape[0]
+    if num_points > max_points:
+        indices = torch.randperm(num_points, device=points.device)[:max_points]
+        points = points[indices]
+        colors = colors[indices]
+
+    if torch.cuda.is_available() and device.type == 'cuda':
+        torch.cuda.synchronize(device)
+    time_needed = time.perf_counter() - start_time
+
     # 5. Save points
     print(f"Saving point cloud to: {args.save_path}")
-    write_ply(res['points'][0][masks].cpu(), imgs.permute(0, 2, 3, 1)[masks], args.save_path)
+    write_ply(points.cpu(), colors, args.save_path)
+    print(f"Reconstruction time needed: {time_needed:.4f} seconds")
     print("Done.")
