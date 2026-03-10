@@ -13,12 +13,15 @@
 </div>
 
 <p align="center">
-    <a href="https://arxiv.org/abs/" target="_blank">
+    <a href="https://arxiv.org/abs/2603.08055" target="_blank">
     <img src="https://img.shields.io/badge/Paper-00AEEF?style=plastic&logo=arxiv&logoColor=white" alt="Paper">
     </a>
     <a href="https://visual-ai.github.io/speed3r/" target="_blank">
     <img src="https://img.shields.io/badge/Project Page-F78100?style=plastic&logo=google-chrome&logoColor=white" alt="Project Page">
     </a>
+      <a href="https://huggingface.co/weining17/Speed3R_Pi3">
+    <img src="https://img.shields.io/badge/Hugging%20Face-Model-FFB300?style=flat&labelColor=555555&logo=huggingface&logoColor=white" alt="Hugging Face">
+  </a>
 </p>
 
 <div align="center">
