@@ -152,10 +152,10 @@ Our work builds upon several fantastic open-source projects. We'd like to expres
 ## Excellent Concurrent Works Accelerating VGGT
   * [FastVGGT](https://github.com/mystorm16/FastVGGT)
   * [FasterVGGT](https://github.com/brianwang00001/sparse-vggt)
-  * [FlashVGGT](https://arxiv.org/abs/2512.04939)
-  * [CO-Me](https://co-me-tokens.github.io/)
+  * [FlashVGGT](https://arxiv.org/abs/2512.02541)
+  * [Co-Me](https://co-me-tokens.github.io/)
   * [AVGGT](https://arxiv.org/abs/2512.02541)
-  * [LiteVGGT](https://arxiv.org/pdf/2512.21691)
+  * [LiteVGGT](https://arxiv.org/abs/2512.04939)
   * [Attetion Collapse Analysis](https://arxiv.org/pdf/2512.21691)
 
 
@@ -168,7 +168,7 @@ If you find our work useful, please consider citing:
 @article{ren2026speed3r,
     title={Speed3R: Sparse Feed-forward 3D Reconstruction Models},
     author={Ren, Weining and Tan, Xiao and Han, Kai},
-    journal={arXiv preprint arXiv:xxxxxxx},
+    journal={arXiv preprint arXiv:2603.08055},
     year={2026}
 }
 ```
