@@ -1,0 +1,45 @@
+# @package _global_
+
+train_dataset:
+    length: 10000000         # dummy
+
+    weights: 
+        CO3DV2: 10000
+
+    CO3DV2:
+        _target_: datasets.co3dv2_dataset.CO3DV2Dataset
+        z_far: 0
+        frame_num: 8
+        aug_crop: 16
+        transform:
+            _partial_: true
+            _target_: datasets.base.transforms.JitterJpegLossBlurring
+        aug_focal: 0.9
+        mode: 'train'
+        data_root: '/userhome/cs4/weining/data/co3d_1x/'
+
+
+train_dataloader:
+    drop_last: True
+    shuffle: True
+
+test_dataset:
+    weights: 
+        CO3DV2: 500
+
+    CO3DV2:
+        _target_: datasets.co3dv2_dataset.CO3DV2Dataset
+        z_far: 0
+        frame_num: 8
+        resolution:
+            - [504, 336]
+        transform:
+            _partial_: true
+            _target_: datasets.base.transforms.ImgToTensor
+        mode: 'test'
+        data_root: '/userhome/cs4/weining/data/co3d_1x/'
+
+
+test_dataloader:
+    drop_last: False
+    shuffle: False

@@ -1,0 +1,27 @@
+# @package _global_
+
+trainer: trainers.pi3_trainer.Pi3Trainer
+
+train:
+  image_num_range: [2, 24]     # hres
+  max_img_per_gpu: 24             # hres
+
+  # dynamic resolution and 
+  random_reslution: true
+  aspect_ratio_range: [0.5, 2.0]
+  pixel_count_range: [100000, 255000] 
+  patch_size: 56
+  num_resolution: -1
+  gradient_accumulation_steps: 4
+  num_epoch: 80
+
+loss:
+    train_loss: 
+        _target_: pi3.models.loss.Pi3LossDistill
+        train_conf: false
+
+    test_loss:
+        _target_: pi3.models.loss.Pi3LossDistill
+        train_conf: false
+
+name: pi3_distill_24frame_wfeat

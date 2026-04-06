@@ -1,0 +1,27 @@
+# @package _global_
+
+trainer: trainers.pi3_trainer.Pi3Trainer
+
+train:
+  image_num_range: [2, 24]     # hres
+  max_img_per_gpu: 48             # hres
+
+  # dynamic resolution and 
+  random_reslution: true
+  aspect_ratio_range: [0.5, 2.0]
+  pixel_count_range: [100000, 255000] 
+  patch_size: 14
+  num_resolution: -1
+
+  num_epoch: 20
+
+model:
+  train_conf: true
+  ckpt: null # <path-to-your-pretrain-checkpoint>
+
+loss:
+  train_loss:
+    train_conf: true
+
+  test_loss:
+    train_conf: true

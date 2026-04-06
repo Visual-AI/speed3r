@@ -1,0 +1,81 @@
+# @package _global_
+
+teacher_model:
+    _target_: pi3.models.pi3.Pi3
+    pos_type: rope100
+    decoder_size: large
+
+model:
+    _target_: pi3.models.pi3_sparse.Pi3_Sparse
+    pos_type: rope100
+    decoder_size: large
+
+loss:
+    train_loss: 
+        _target_: pi3.models.loss.Pi3Loss
+        train_conf: false
+
+    test_loss:
+        _target_: pi3.models.loss.Pi3Loss
+        train_conf: false
+
+train:
+    num_workers: 4
+    batch_size: 1              # not use, dynamic batch size
+    num_epoch: 80
+    iters_per_epoch: 800
+
+    print_freq: 100
+    base_seed: 666
+
+    model_dtype: bf16
+    # dynamic complie
+    dynamo_backend: NO  # CUDAGRAPHS  # INDUCTOR  # NO
+    dynamic_compile: true
+
+    # Training config
+    gradient_accumulation_steps: 1
+    clip_grad: 1.0
+    clip_loss: 10
+    
+    seed: 42
+    resume: null
+    auto_resume: true
+    start_epoch: 0
+    global_step: 0
+    world_size: 1
+    rank: -1
+    gpu: -1
+    dist_on_itp: false
+    find_unused_parameters: True
+
+    # for distributed training
+    distributed: false
+    dist_url: env://
+    dist_backend: "nccl"
+
+    # Optimizer config
+    optimizer:
+        type: AdamW
+        lr: 1e-5
+        weight_decay: 5e-2
+        betas: [0.9, 0.95]
+        verbose: true
+        filter_bias_and_bn: true
+
+        encoder_lr: 1e-6
+
+    lr_scheduler:
+        type: OneCycleLR
+        max_lr: ${train.optimizer.lr}
+        pct_start: 0.0
+        anneal_strategy: cos
+        div_factor: 1000.0
+        final_div_factor: 100.0
+        total_steps: -1
+
+test:
+    num_workers: 8              # 8
+    batch_size: 1              # not use, dynamic batch size
+    print_freq: 10
+    iters_per_test: -1

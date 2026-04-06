@@ -1,0 +1,14 @@
+# @package _global_
+
+trainer: trainers.pi3_trainer.Pi3Trainer
+
+train:
+  image_num_range: [2, 24]     # hres
+  max_img_per_gpu: 64             # hres
+
+  # low resolution
+  resolution: 
+    - [224, 224]
+
+model:
+  ckpt: null # <path-to-your-pretrain-checkpoint>

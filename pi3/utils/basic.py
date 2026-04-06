@@ -8,35 +8,31 @@ from torchvision import transforms
 from plyfile import PlyData, PlyElement
 import numpy as np
 
-def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, verbose=True, round_patch=56):
+def load_images_as_tensor(path='data/truck', interval=1, PIXEL_LIMIT=255000, round_patch=14):
     """
     Loads images from a directory or video, resizes them to a uniform size,
     then converts and stacks them into a single [N, 3, H, W] PyTorch tensor.
     """
-    sources = []
-
+    sources = [] 
+    
     # --- 1. Load image paths or video frames ---
     if osp.isdir(path):
-        if verbose:
-            print(f"Loading images from directory: {path}")
-        filenames = sorted([x for x in os.listdir(path) if x.lower().endswith((".png", ".jpg", ".jpeg"))])
+        print(f"Loading images from directory: {path}")
+        filenames = sorted([x for x in os.listdir(path) if x.lower().endswith(('.png', '.jpg', '.jpeg'))])
         for i in range(0, len(filenames), interval):
             img_path = osp.join(path, filenames[i])
             try:
-                sources.append(Image.open(img_path).convert("RGB"))
+                sources.append(Image.open(img_path).convert('RGB'))
             except Exception as e:
                 print(f"Could not load image {filenames[i]}: {e}")
-    elif path.lower().endswith(".mp4"):
-        if verbose:
-            print(f"Loading frames from video: {path}")
+    elif path.lower().endswith('.mp4'):
+        print(f"Loading frames from video: {path}")
         cap = cv2.VideoCapture(path)
-        if not cap.isOpened():
-            raise OSError(f"Cannot open video file: {path}")
+        if not cap.isOpened(): raise IOError(f"Cannot open video file: {path}")
         frame_idx = 0
         while True:
             ret, frame = cap.read()
-            if not ret:
-                break
+            if not ret: break
             if frame_idx % interval == 0:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 sources.append(Image.fromarray(rgb_frame))
@@ -49,8 +45,7 @@ def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, ver
         print("No images found or loaded.")
         return torch.empty(0)
 
-    if verbose:
-        print(f"Found {len(sources)} images/frames. Processing...")
+    print(f"Found {len(sources)} images/frames. Processing...")
 
     # --- 2. Determine a uniform target size for all images based on the first image ---
     # This is necessary to ensure all tensors have the same dimensions for stacking.
@@ -60,19 +55,16 @@ def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, ver
     W_target, H_target = W_orig * scale, H_orig * scale
     k, m = round(W_target / round_patch), round(H_target / round_patch)
     while (k * round_patch) * (m * round_patch) > PIXEL_LIMIT:
-        if k / m > W_target / H_target:
-            k -= 1
-        else:
-            m -= 1
+        if k / m > W_target / H_target: k -= 1
+        else: m -= 1
     TARGET_W, TARGET_H = max(1, k) * round_patch, max(1, m) * round_patch
-    if verbose:
-        print(f"All images will be resized to a uniform size: ({TARGET_W}, {TARGET_H})")
+    print(f"All images will be resized to a uniform size: ({TARGET_W}, {TARGET_H})")
 
     # --- 3. Resize images and convert them to tensors in the [0, 1] range ---
     tensor_list = []
     # Define a transform to convert a PIL Image to a CxHxW tensor and normalize to [0,1]
     to_tensor_transform = transforms.ToTensor()
-
+    
     for img_pil in sources:
         try:
             # Resize to the uniform target size
@@ -90,166 +82,6 @@ def load_images_as_tensor(path="data/truck", interval=1, PIXEL_LIMIT=255000, ver
     # --- 4. Stack the list of tensors into a single [N, C, H, W] batch tensor ---
     return torch.stack(tensor_list, dim=0)
 
-
-def load_multimodal_data(path="data/truck", conditions=None, interval=1, PIXEL_LIMIT=255000, verbose=True, device='cpu'):
-    """
-    Loads images (using strict original logic) and aligns optional conditions (poses, depths, intrinsics).
-    
-    Args:
-        path: Path to images or video.
-        conditions: Dict containing numpy arrays:
-                    - 'intrinsics': (N_total, 3, 3)
-                    - 'poses': (N_total, 4, 4)
-                    - 'depths': (N_total, H, W)
-        interval: Sampling interval.
-    
-    Returns:
-        dict: {
-            'images': (N, 3, H, W),
-            'poses': (N, 4, 4) or None,
-            'depths': (N, H, W) or None,
-            'intrinsics': (N, 3, 3) or None
-        }
-    """
-    sources = []
-
-    # --- 1. Load image paths or video frames ---
-    if osp.isdir(path):
-        if verbose:
-            print(f"Loading images from directory: {path}")
-        filenames = sorted([x for x in os.listdir(path) if x.lower().endswith((".png", ".jpg", ".jpeg"))])
-        for i in range(0, len(filenames), interval):
-            img_path = osp.join(path, filenames[i])
-            try:
-                sources.append(Image.open(img_path).convert("RGB"))
-            except Exception as e:
-                print(f"Could not load image {filenames[i]}: {e}")
-    elif path.lower().endswith(".mp4"):
-        if verbose:
-            print(f"Loading frames from video: {path}")
-        cap = cv2.VideoCapture(path)
-        if not cap.isOpened():
-            raise OSError(f"Cannot open video file: {path}")
-        frame_idx = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if frame_idx % interval == 0:
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                sources.append(Image.fromarray(rgb_frame))
-            frame_idx += 1
-        cap.release()
-    else:
-        raise ValueError(f"Unsupported path. Must be a directory or a .mp4 file: {path}")
-
-    if not sources:
-        print("No images found or loaded.")
-        return {'images': torch.empty(0)}
-
-    if verbose:
-        print(f"Found {len(sources)} images/frames. Processing...")
-
-    # --- 2. Determine a uniform target size for all images based on the first image ---
-    # This is necessary to ensure all tensors have the same dimensions for stacking.
-    first_img = sources[0]
-    W_orig, H_orig = first_img.size
-    scale = math.sqrt(PIXEL_LIMIT / (W_orig * H_orig)) if W_orig * H_orig > 0 else 1
-    W_target, H_target = W_orig * scale, H_orig * scale
-    k, m = round(W_target / 14), round(H_target / 14)
-    while (k * 14) * (m * 14) > PIXEL_LIMIT:
-        if k / m > W_target / H_target:
-            k -= 1
-        else:
-            m -= 1
-    TARGET_W, TARGET_H = max(1, k) * 14, max(1, m) * 14
-    if verbose:
-        print(f"All images will be resized to a uniform size: ({TARGET_W}, {TARGET_H})")
-
-    # --- 3. Resize images and convert them to tensors in the [0, 1] range ---
-    tensor_list = []
-    # Define a transform to convert a PIL Image to a CxHxW tensor and normalize to [0,1]
-    to_tensor_transform = transforms.ToTensor()
-
-    for img_pil in sources:
-        try:
-            # Resize to the uniform target size
-            resized_img = img_pil.resize((TARGET_W, TARGET_H), Image.Resampling.LANCZOS)
-            # Convert to tensor
-            img_tensor = to_tensor_transform(resized_img)
-            tensor_list.append(img_tensor)
-        except Exception as e:
-            print(f"Error processing an image: {e}")
-
-    if not tensor_list:
-        print("No images were successfully processed.")
-        return {'images': torch.empty(0)}
-
-    # --- 4. Stack the list of tensors into a single [N, C, H, W] batch tensor ---
-    images_tensor = torch.stack(tensor_list, dim=0)
-    
-    # =========================================================================
-    # NEW: Process Conditions (Poses, Depths, Intrinsics)
-    # =========================================================================
-    
-    N_out = images_tensor.shape[0] # The actual number of successfully loaded frames
-    
-    out_poses = None
-    out_depths = None
-    out_intrinsics = None
-
-    if conditions is not None:
-        # Calculate resize ratios for geometry alignment
-        # (Must be calculated here because TARGET_W/H might have been adjusted by the while loop above)
-        scale_x = TARGET_W / W_orig
-        scale_y = TARGET_H / H_orig
-
-        # --- A. Process Poses (Slice) ---
-        if 'poses' in conditions and conditions['poses'] is not None:
-            raw_poses = conditions['poses'] # Expected numpy (N_total, 4, 4)
-            # Apply interval and trim to N_out
-            sliced_poses = raw_poses[::interval][:N_out]
-            out_poses = torch.from_numpy(sliced_poses).float()[None].to(device) # (N, 4, 4)
-
-        # --- B. Process Depths (Slice + Resize) ---
-        if 'depths' in conditions and conditions['depths'] is not None:
-            raw_depths = conditions['depths'] # Expected numpy (N_total, H_orig, W_orig)
-            sliced_depths = raw_depths[::interval][:N_out]
-            
-            resized_depths_list = []
-            for d_map in sliced_depths:
-                # Use Nearest Neighbor for depth to avoid flying pixels
-                # cv2.resize expects (width, height)
-                d_resized = cv2.resize(d_map, (TARGET_W, TARGET_H), interpolation=cv2.INTER_NEAREST)
-
-                valid_depth = np.logical_and(d_resized > 0, np.isfinite(d_resized))
-                d_resized[~valid_depth] = 0
-
-                resized_depths_list.append(torch.from_numpy(d_resized))
-            
-            if resized_depths_list:
-                out_depths = torch.stack(resized_depths_list, dim=0)[None].to(device) # (N, H, W)
-
-        # --- C. Process Intrinsics (Slice + Rescale) ---
-        if 'intrinsics' in conditions and conditions['intrinsics'] is not None:
-            raw_intrinsics = conditions['intrinsics'] # Expected numpy (N_total, 3, 3)
-            # Copy to avoid modifying original dict
-            sliced_Ks = raw_intrinsics[::interval][:N_out].copy()
-            
-            # Rescale (fx, fy, cx, cy)
-            # K = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
-            sliced_Ks[:, 0, 0] *= scale_x # fx
-            sliced_Ks[:, 0, 2] *= scale_x # cx
-            sliced_Ks[:, 1, 1] *= scale_y # fy
-            sliced_Ks[:, 1, 2] *= scale_y # cy
-            
-            out_intrinsics = torch.from_numpy(sliced_Ks).float()[None].to(device) # (N, 3, 3)
-
-    return images_tensor[None].to(device), {
-        'poses': out_poses,            # (N, 4, 4)
-        'depths': out_depths,          # (N, H, W)
-        'intrinsics': out_intrinsics   # (N, 3, 3)
-    }
 
 def tensor_to_pil(tensor):
     """

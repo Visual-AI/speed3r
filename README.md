@@ -35,6 +35,7 @@
 
 
 ## 📣 Updates
+* **[April 6, 2026]** Training Code Release
 * **[March 6, 2026]** Initial Release
 
 
@@ -127,8 +128,8 @@ print("Reconstruction complete!")
 ```
 
 ## TODOs
+- [x] Release the training code
 - [ ] Release Speed3R-VGGT code & ckpt
-- [ ] Release the training 
 
 ## Notice
 1. Currently, the model only supports resolutions that are multiples of 56 rather than 14.
