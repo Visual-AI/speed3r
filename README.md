@@ -127,6 +127,14 @@ print("Reconstruction complete!")
 # Access outputs: results['points'], results['camera_poses'] and results['local_points'].
 ```
 
+
+## Training Details
+To train the model, please follow VGGT to [prepare the CO3Dv2 dataset](https://github.com/facebookresearch/vggt/tree/main/training), and run:
+
+```bash
+bash scripts/train.sh
+```
+
 ## TODOs
 - [x] Release the training code
 - [ ] Release Speed3R-VGGT code & ckpt
