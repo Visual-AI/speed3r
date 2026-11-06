@@ -1,0 +1,108 @@
+/* ===== Speedup Chart Component Styles ===== */
+.sc-container {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 20px 50px -12px rgba(0,0,0,0.12);
+    width: 100%;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.sc-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 0.25rem 0;
+}
+
+.sc-subtitle {
+    color: #64748b;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.sc-highlight {
+    background: linear-gradient(90deg, #3b82f6, #9333ea);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+}
+
+.sc-chart-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.sc-overlay-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    overflow: visible;
+}
+
+.sc-labels-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 20;
+}
+
+.sc-arrow-glow {
+    fill: none;
+    stroke: url(#sc-arrowGrad);
+    stroke-width: 18;
+    stroke-linecap: round;
+    opacity: 0;
+    filter: url(#sc-blurGlow);
+    transition: opacity 1s ease-in;
+}
+.sc-arrow-glow.on { opacity: 0.18; }
+
+.sc-arrow-main {
+    fill: none;
+    stroke: url(#sc-arrowGrad);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sc-badge {
+    position: absolute;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+    transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none;
+}
+.sc-badge.on {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+.sc-badge.sc-hero {
+    font-size: 15px;
+    padding: 7px 16px;
+    letter-spacing: 0.03em;
+}
+.sc-badge.sc-hero.on {
+    animation: sc-pulse 2.2s ease-in-out 2 0.4s;
+}
+
+@keyframes sc-pulse {
+    0%, 100% {
+        box-shadow: 0 4px 18px rgba(147,51,234,0.35);
+        transform: translate(-50%,-50%) scale(1);
+    }
+    50% {
+        box-shadow: 0 6px 30px rgba(147,51,234,0.55);
+        transform: translate(-50%,-50%) scale(1.06);
+    }
+}

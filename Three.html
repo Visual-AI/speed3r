@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Point Cloud Comparison</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  canvas { display: block; }
+
+  .divider {
+    position: fixed; top: 0; left: 50%;
+    width: 1px; height: 100%;
+    background: rgba(0,0,0,0.10);
+    z-index: 5; pointer-events: none;
+  }
+
+  .header {
+    position: fixed; top: 20px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    background: rgba(0,0,0,0.7);
+    color: #fff; padding: 7px 22px;
+    border-radius: 20px; font-size: 13px;
+    font-weight: 500; pointer-events: none;
+    letter-spacing: 0.3px;
+  }
+
+  .label {
+    position: fixed; bottom: 32px;
+    z-index: 10; text-align: center;
+    pointer-events: none;
+  }
+  .label-left  { left: 0; width: 50%; }
+  .label-right { left: 50%; width: 50%; }
+  .label-inner {
+    display: inline-block;
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 10px 28px; border-radius: 14px;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.06);
+  }
+  .label .method-name {
+    display: block; font-size: 20px;
+    font-weight: 700; color: #1a1a1a;
+  }
+  .label .method-time {
+    display: inline-block; margin-top: 5px;
+    font-size: 13px; font-weight: 600;
+    padding: 2px 14px; border-radius: 10px;
+    background: rgba(0,0,0,0.06); color: #555;
+  }
+
+  .settings-btn {
+    position: fixed; top: 16px; right: 16px;
+    z-index: 20; width: 40px; height: 40px;
+    border-radius: 50%; border: none;
+    background: rgba(0,0,0,0.6); color: #fff;
+    font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .settings-btn:hover { background: rgba(0,0,0,0.85); }
+
+  .settings-panel {
+    position: fixed; top: 0; right: -400px;
+    width: 380px; height: 100%;
+    background: #fff;
+    border-left: 1px solid #e5e5e5;
+    z-index: 15; padding: 26px 24px;
+    overflow-y: auto;
+    transition: right 0.3s cubic-bezier(.4,0,.2,1);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.07);
+  }
+  .settings-panel.open { right: 0; }
+  .settings-panel h2 {
+    font-size: 17px; margin-bottom: 22px; color: #111;
+    border-bottom: 2px solid #f0f0f0; padding-bottom: 12px;
+  }
+  .settings-panel h3 {
+    font-size: 11px; margin: 20px 0 10px; color: #999;
+    text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;
+  }
+  .settings-panel label {
+    display: block; margin-bottom: 12px; font-size: 13px; color: #333;
+  }
+  .settings-panel label span {
+    display: block; margin-bottom: 4px; font-weight: 500; color: #555;
+  }
+  .settings-panel input[type=text],
+  .settings-panel input[type=number] {
+    width: 100%; padding: 8px 10px;
+    border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; color: #333; outline: none;
+    transition: border-color 0.2s;
+  }
+  .settings-panel input:focus { border-color: #888; }
+  .settings-panel input[type=range] { width: 100%; margin-top: 2px; }
+  .settings-panel input[type=file] { font-size: 12px; margin-top: 2px; }
+  .range-val { float: right; font-size: 12px; color: #888; font-weight: 400; }
+  .file-row { display: flex; gap: 6px; align-items: center; }
+  .file-row input[type=text] { flex: 1; }
+  .file-row button, .btn {
+    padding: 8px 14px; border: none; border-radius: 6px;
+    background: #1a1a1a; color: #fff;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+    transition: background 0.2s;
+  }
+  .file-row button:hover, .btn:hover { background: #444; }
+  .btn-blue { background: #2563eb; }
+  .btn-blue:hover { background: #1d4ed8; }
+  .cb-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px;
+  }
+  .cb-row input[type=checkbox] { width: auto; }
+  .cb-row label { margin: 0; font-size: 13px; cursor: pointer; }
+
+  .hint {
+    position: fixed; bottom: 8px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; color: #bbb;
+    pointer-events: none; z-index: 6;
+  }
+
+  .toast {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(0,0,0,0.78); color: #fff;
+    padding: 14px 32px; border-radius: 12px;
+    font-size: 14px; font-weight: 600;
+    z-index: 100; pointer-events: none;
+    opacity: 0; transition: all 0.3s ease;
+  }
+  .toast.show {
+    opacity: 1; transform: translate(-50%, -50%) scale(1);
+  }
+
+  body.hide-ui .header,
+  body.hide-ui .label,
+  body.hide-ui .divider,
+  body.hide-ui .settings-btn,
+  body.hide-ui .settings-panel,
+  body.hide-ui .hint { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div class="divider" id="divider"></div>
+<div class="header" id="headerLabel">4 Images Input</div>
+
+<div class="label label-left">
+  <div class="label-inner">
+    <span class="method-name" id="leftName">VGGT</span>
+    <span class="method-time" id="leftTime">10s</span>
+  </div>
+</div>
+<div class="label label-right">
+  <div class="label-inner">
+    <span class="method-name" id="rightName">Speed3R-VGGT</span>
+    <span class="method-time" id="rightTime">3s</span>
+  </div>
+</div>
+
+<div class="hint">R = 重播动画 · H = 隐藏UI · 滚轮缩放 · 拖拽旋转</div>
+
+<div class="toast" id="toast"></div>
+
+<button class="settings-btn" id="settingsBtn">⚙</button>
+
+<div class="settings-panel" id="settingsPanel">
+  <h2>⚙ Comparison Settings</h2>
+
+  <h3>General</h3>
+  <label>
+    <span>Header Text</span>
+    <input type="text" id="cfgHeader" value="4 Images Input" />
+  </label>
+  <label>
+    <span>Point Size <em class="range-val" id="psVal">8</em></span>
+    <input type="range" id="cfgPointSize" min="1" max="60" step="0.5" value="8" />
+  </label>
+  <label>
+    <span>Brightness <em class="range-val" id="brVal">1.8</em></span>
+    <input type="range" id="cfgBrightness" min="0.5" max="4.0" step="0.05" value="1.8" />
+  </label>
+  <label>
+    <span>Gamma (提亮暗部) <em class="range-val" id="gaVal">0.55</em></span>
+    <input type="range" id="cfgGamma" min="0.2" max="1.5" step="0.01" value="0.55" />
+  </label>
+  <label>
+    <span>Float Intensity <em class="range-val" id="flVal">0.012</em></span>
+    <input type="range" id="cfgFloat" min="0" max="0.06" step="0.001" value="0.012" />
+  </label>
+  <label>
+    <span>Entrance Duration (s) <em class="range-val" id="enVal">2.5</em></span>
+    <input type="range" id="cfgEntrance" min="0.5" max="10" step="0.1" value="2.5" />
+  </label>
+  <div class="cb-row">
+    <input type="checkbox" id="cfgAutoRotate" checked />
+    <label for="cfgAutoRotate">Auto Rotate</label>
+  </div>
+  <div class="cb-row">
+    <input type="checkbox" id="cfgSoftParticle" />
+    <label for="cfgSoftParticle">Soft Glow Mode</label>
+  </div>
+
+  <h3>Left Method</h3>
+  <label>
+    <span>Method Name</span>
+    <input type="text" id="cfgLeftName" value="VGGT" />
+  </label>
+  <label>
+    <span>Time Label</span>
+    <input type="text" id="cfgLeftTime" value="10s" />
+  </label>
+  <label>
+    <span>Entrance Delay (s) <em class="range-val" id="ldVal">0</em></span>
+    <input type="range" id="cfgLeftDelay" min="0" max="10" step="0.1" value="0" />
+  </label>
+  <label>
+    <span>Entrance Speed (s) <em class="range-val" id="lsVal">2.5</em></span>
+    <input type="range" id="cfgLeftSpeed" min="0.3" max="10" step="0.1" value="2.5" />
+  </label>
+  <label>
+    <span>PLY File Path</span>
+    <div class="file-row">
+      <input type="text" id="cfgLeftPath" value="./speed3r/resources/3d_vis/vggt/barn.ply" />
+      <button id="loadLeftBtn">Load</button>
+    </div>
+  </label>
+  <label>
+    <span>Or Upload PLY</span>
+    <input type="file" id="cfgLeftFile" accept=".ply" />
+  </label>
+
+  <h3>Right Method</h3>
+  <label>
+    <span>Method Name</span>
+    <input type="text" id="cfgRightName" value="Speed3R-VGGT" />
+  </label>
+  <label>
+    <span>Time Label</span>
+    <input type="text" id="cfgRightTime" value="3s" />
+  </label>
+  <label>
+    <span>Entrance Delay (s) <em class="range-val" id="rdVal">0</em></span>
+    <input type="range" id="cfgRightDelay" min="0" max="10" step="0.1" value="0" />
+  </label>
+  <label>
+    <span>Entrance Speed (s) <em class="range-val" id="rsVal">2.5</em></span>
+    <input type="range" id="cfgRightSpeed" min="0.3" max="10" step="0.1" value="2.5" />
+  </label>
+  <label>
+    <span>PLY File Path</span>
+    <div class="file-row">
+      <input type="text" id="cfgRightPath" value="./speed3r/resources/3d_vis/vggt+ours/barn.ply" />
+      <button id="loadRightBtn">Load</button>
+    </div>
+  </label>
+  <label>
+    <span>Or Upload PLY</span>
+    <input type="file" id="cfgRightFile" accept=".ply" />
+  </label>
+
+  <h3>Actions</h3>
+  <button class="btn" id="btnReplay" style="width:100%;margin-bottom:8px;background:#7c3aed">
+    ▶ Replay Entrance (R)
+  </button>
+  <button class="btn" id="btnReloadBoth" style="width:100%;margin-bottom:8px">
+    Reload Both from Paths
+  </button>
+  <button class="btn" id="btnResetCam" style="width:100%;margin-bottom:8px;background:#555">
+    Reset Camera
+  </button>
+  <button class="btn btn-blue" id="btnToggleUI" style="width:100%">
+    Hide UI (H)
+  </button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { PLYLoader }     from 'three/addons/loaders/PLYLoader.js';
+
+/* ============================================================
+   Config
+============================================================ */
+const cfg = {
+  pointSize: 8,
+  brightness: 1.8,
+  gamma: 0.55,
+  floatIntensity: 0.012,
+  entranceDur: 2.5,
+  autoRotate: true,
+  softGlow: false,
+  leftDelay: 0,
+  leftSpeed: 2.5,
+  rightDelay: 0,
+  rightSpeed: 2.5,
+};
+
+/* ============================================================
+   Toast
+============================================================ */
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+/* ============================================================
+   Renderer
+============================================================ */
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setClearColor(0xffffff);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(50, (innerWidth / 2) / innerHeight, 0.1, 1000);
+const defaultCamPos = new THREE.Vector3(0, 0.6, 3.2);
+camera.position.copy(defaultCamPos);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+/* ============================================================
+   Scenes
+============================================================ */
+const sceneL = new THREE.Scene();
+const sceneR = new THREE.Scene();
+const pivotL = new THREE.Group();
+const pivotR = new THREE.Group();
+sceneL.add(pivotL);
+sceneR.add(pivotR);
+
+/* ============================================================
+   Shaders
+============================================================ */
+const vertexShader = /* glsl */ `
+  uniform float uPointSize;
+  uniform float uTime;
+  uniform float uProgress;
+  uniform float uFloatAmt;
+  uniform float uBrightness;
+  uniform float uGamma;
+
+  attribute float aScale;
+  attribute vec3  aRandom;
+
+  varying vec3  vColor;
+  varying float vAlpha;
+
+  float ease(float t) {
+    return t * t * (3.0 - 2.0 * t);
+  }
+
+  void main() {
+    #ifdef USE_COLOR
+      vec3 c = color;
+      c = pow(c, vec3(uGamma));
+      c *= uBrightness;
+      float lum = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(vec3(lum), c, 1.15);
+      vColor = clamp(c, 0.0, 1.0);
+    #else
+      vColor = vec3(0.65) * uBrightness;
+    #endif
+
+    float prog = clamp(uProgress, 0.0, 1.0);
+    float e = ease(prog);
+
+    vec3 scattered = position + aRandom * 4.0;
+    vec3 pos = mix(scattered, position, e);
+
+    float fi = uFloatAmt * e;
+    pos.x += sin(uTime * 0.7 + position.y * 12.0 + aScale * 5.0) * fi;
+    pos.y += cos(uTime * 0.9 + position.x * 10.0 + aScale * 3.0) * fi;
+    pos.z += sin(uTime * 0.8 + position.z * 11.0 + aScale * 4.0) * fi;
+
+    vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+
+    float sizeIn = mix(0.15, 1.0, e);
+    float pulse  = 1.0 + sin(uTime * 1.8 + aScale * 25.0) * 0.06 * e;
+    gl_PointSize = (aScale * uPointSize * sizeIn * pulse) / -mvPos.z;
+    gl_Position  = projectionMatrix * mvPos;
+
+    vAlpha = e;
+  }
+`;
+
+const fragHard = /* glsl */ `
+  varying vec3  vColor;
+  varying float vAlpha;
+  void main() {
+    float d = length(gl_PointCoord - 0.5) * 2.0;
+    if (d > 1.0) discard;
+    float edge = 1.0 - smoothstep(0.7, 1.0, d);
+    gl_FragColor = vec4(vColor, edge * vAlpha);
+  }
+`;
+
+const fragSoft = /* glsl */ `
+  varying vec3  vColor;
+  varying float vAlpha;
+  void main() {
+    float d = length(gl_PointCoord - 0.5) * 2.0;
+    if (d > 1.0) discard;
+    float glow = pow(1.0 - d, 1.6) * 0.95;
+    gl_FragColor = vec4(vColor, glow * vAlpha);
+  }
+`;
+
+/* ============================================================
+   Uniforms
+============================================================ */
+function makeUniforms() {
+  return {
+    uPointSize:  { value: cfg.pointSize },
+    uTime:       { value: 0 },
+    uProgress:   { value: 0 },
+    uFloatAmt:   { value: cfg.floatIntensity },
+    uBrightness: { value: cfg.brightness },
+    uGamma:      { value: cfg.gamma },
+  };
+}
+
+const uniformsL = makeUniforms();
+const uniformsR = makeUniforms();
+
+function makeMaterial(uniforms, hasColor) {
+  return new THREE.ShaderMaterial({
+    vertexShader,
+    fragmentShader: cfg.softGlow ? fragSoft : fragHard,
+    uniforms,
+    transparent:  true,
+    depthWrite:   false,
+    depthTest:    true,
+    blending:     THREE.NormalBlending,
+    vertexColors: hasColor,
+  });
+}
+
+function rebuildMaterials() {
+  [{ pivot: pivotL, u: uniformsL }, { pivot: pivotR, u: uniformsR }].forEach(({ pivot, u }) => {
+    pivot.children.forEach(child => {
+      if (child.isPoints) {
+        const hc = child.material.vertexColors;
+        child.material.dispose();
+        child.material = makeMaterial(u, hc);
+      }
+    });
+  });
+}
+
+/* ============================================================
+   Entrance — single shared base time, both start together
+   ★ 用 Infinity 确保加载期间 progress = 0，点云不可见
+============================================================ */
+let entranceBaseTime = Infinity;
+
+function triggerEntrance(silent) {
+  entranceBaseTime = performance.now() / 1000;
+  // if (!silent) showToast('▶ 重播动画');
+}
+
+/* ============================================================
+   Loading — wait for BOTH to finish, then trigger once
+============================================================ */
+let pendingLoads = 0;
+let batchLoading = false;
+
+function startBatchLoad() {
+  batchLoading = true;
+  pendingLoads = 2;
+  entranceBaseTime = Infinity;  /* ★ 加载期间保持 progress=0 */
+}
+
+function onOneLoaded() {
+  if (!batchLoading) return;
+  pendingLoads--;
+  if (pendingLoads <= 0) {
+    batchLoading = false;
+    triggerEntrance(true);
+  }
+}
+
+/* ============================================================
+   PLY helpers
+============================================================ */
+const plyLoader = new PLYLoader();
+
+function processGeometry(geo) {
+  if (!geo.getAttribute('normal')) geo.computeVertexNormals();
+  const count = geo.getAttribute('position').count;
+
+  const aScale  = new Float32Array(count);
+  const aRandom = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    aScale[i] = 0.5 + Math.random() * 0.7;
+    aRandom[i * 3]     = (Math.random() - 0.5) * 2;
+    aRandom[i * 3 + 1] = (Math.random() - 0.5) * 2;
+    aRandom[i * 3 + 2] = (Math.random() - 0.5) * 2;
+  }
+  geo.setAttribute('aScale',  new THREE.BufferAttribute(aScale, 1));
+  geo.setAttribute('aRandom', new THREE.BufferAttribute(aRandom, 3));
+
+  geo.computeBoundingBox();
+  geo.center();
+  const size = new THREE.Vector3();
+  geo.boundingBox.getSize(size);
+  const s = 2.0 / Math.max(size.x, size.y, size.z);
+  geo.scale(s, s, s);
+  return geo;
+}
+
+function clearPivot(pivot) {
+  while (pivot.children.length) {
+    const c = pivot.children[0];
+    pivot.remove(c);
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) c.material.dispose();
+  }
+}
+
+function addPoints(geo, pivot, uniforms) {
+  const hasColor = !!geo.getAttribute('color');
+  const mat = makeMaterial(uniforms, hasColor);
+  pivot.add(new THREE.Points(geo, mat));
+}
+
+function loadFromPath(path, pivot, uniforms, side) {
+  clearPivot(pivot);
+  plyLoader.load(path, (geo) => {
+    processGeometry(geo);
+    addPoints(geo, pivot, uniforms);
+    console.log('loaded', side, '| vertices:', geo.getAttribute('position').count);
+    onOneLoaded();
+  }, null, (err) => {
+    console.error('Load failed:', path, err);
+    onOneLoaded();
+  });
+}
+
+function loadFromFile(file, pivot, uniforms, side) {
+  clearPivot(pivot);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const geo = plyLoader.parse(e.target.result);
+    processGeometry(geo);
+    addPoints(geo, pivot, uniforms);
+    console.log('loaded file', side, '| vertices:', geo.getAttribute('position').count);
+    onOneLoaded();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* Single-side load (not batch) */
+function loadSingleFromPath(path, pivot, uniforms, side) {
+  clearPivot(pivot);
+  plyLoader.load(path, (geo) => {
+    processGeometry(geo);
+    addPoints(geo, pivot, uniforms);
+    triggerEntrance(false);
+  }, null, (err) => console.error('Load failed:', path, err));
+}
+
+function loadSingleFromFile(file, pivot, uniforms, side) {
+  clearPivot(pivot);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const geo = plyLoader.parse(e.target.result);
+    processGeometry(geo);
+    addPoints(geo, pivot, uniforms);
+    triggerEntrance(false);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ============================================================
+   Load both together
+============================================================ */
+function loadBoth() {
+  startBatchLoad();
+  loadFromPath(document.getElementById('cfgLeftPath').value,  pivotL, uniformsL, 'left');
+  loadFromPath(document.getElementById('cfgRightPath').value, pivotR, uniformsR, 'right');
+}
+
+/* Initial load */
+loadBoth();
+
+/* ============================================================
+   UI
+============================================================ */
+const $ = (id) => document.getElementById(id);
+const sp = $('settingsPanel');
+
+$('settingsBtn').onclick = () => sp.classList.toggle('open');
+
+$('cfgHeader').oninput    = (e) => $('headerLabel').textContent = e.target.value;
+$('cfgLeftName').oninput   = (e) => $('leftName').textContent   = e.target.value;
+$('cfgLeftTime').oninput   = (e) => $('leftTime').textContent   = e.target.value;
+$('cfgRightName').oninput  = (e) => $('rightName').textContent  = e.target.value;
+$('cfgRightTime').oninput  = (e) => $('rightTime').textContent  = e.target.value;
+
+$('cfgPointSize').oninput = (e) => {
+  const v = parseFloat(e.target.value);
+  cfg.pointSize = v;
+  uniformsL.uPointSize.value = v;
+  uniformsR.uPointSize.value = v;
+  $('psVal').textContent = v;
+};
+
+$('cfgBrightness').oninput = (e) => {
+  const v = parseFloat(e.target.value);
+  cfg.brightness = v;
+  uniformsL.uBrightness.value = v;
+  uniformsR.uBrightness.value = v;
+  $('brVal').textContent = v;
+};
+
+$('cfgGamma').oninput = (e) => {
+  const v = parseFloat(e.target.value);
+  cfg.gamma = v;
+  uniformsL.uGamma.value = v;
+  uniformsR.uGamma.value = v;
+  $('gaVal').textContent = v;
+};
+
+$('cfgFloat').oninput = (e) => {
+  const v = parseFloat(e.target.value);
+  cfg.floatIntensity = v;
+  uniformsL.uFloatAmt.value = v;
+  uniformsR.uFloatAmt.value = v;
+  $('flVal').textContent = v;
+};
+
+$('cfgEntrance').oninput = (e) => {
+  cfg.entranceDur = parseFloat(e.target.value);
+  $('enVal').textContent = cfg.entranceDur;
+};
+
+$('cfgAutoRotate').onchange = (e) => cfg.autoRotate = e.target.checked;
+
+$('cfgSoftParticle').onchange = (e) => {
+  cfg.softGlow = e.target.checked;
+  rebuildMaterials();
+};
+
+$('cfgLeftDelay').oninput = (e) => {
+  cfg.leftDelay = parseFloat(e.target.value);
+  $('ldVal').textContent = cfg.leftDelay;
+};
+$('cfgLeftSpeed').oninput = (e) => {
+  cfg.leftSpeed = parseFloat(e.target.value);
+  $('lsVal').textContent = cfg.leftSpeed;
+};
+$('cfgRightDelay').oninput = (e) => {
+  cfg.rightDelay = parseFloat(e.target.value);
+  $('rdVal').textContent = cfg.rightDelay;
+};
+$('cfgRightSpeed').oninput = (e) => {
+  cfg.rightSpeed = parseFloat(e.target.value);
+  $('rsVal').textContent = cfg.rightSpeed;
+};
+
+/* Single side load buttons */
+$('loadLeftBtn').onclick   = () => loadSingleFromPath($('cfgLeftPath').value, pivotL, uniformsL, 'left');
+$('loadRightBtn').onclick  = () => loadSingleFromPath($('cfgRightPath').value, pivotR, uniformsR, 'right');
+
+/* Reload both — batch, triggers together */
+$('btnReloadBoth').onclick = () => loadBoth();
+
+$('cfgLeftFile').onchange  = (e) => { if (e.target.files[0]) loadSingleFromFile(e.target.files[0], pivotL, uniformsL, 'left'); };
+$('cfgRightFile').onchange = (e) => { if (e.target.files[0]) loadSingleFromFile(e.target.files[0], pivotR, uniformsR, 'right'); };
+
+$('btnReplay').onclick = () => triggerEntrance(false);
+
+$('btnResetCam').onclick = () => {
+  camera.position.copy(defaultCamPos);
+  controls.target.set(0, 0, 0);
+  controls.update();
+  showToast('📷 Camera Reset');
+};
+
+$('btnToggleUI').onclick = () => {
+  document.body.classList.toggle('hide-ui');
+  sp.classList.remove('open');
+};
+
+/* ============================================================
+   Keyboard: R = replay, H = hide UI
+============================================================ */
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  const key = e.key.toLowerCase();
+  if (key === 'r') {
+    triggerEntrance(false);
+  } else if (key === 'h') {
+    document.body.classList.toggle('hide-ui');
+    sp.classList.remove('open');
+  }
+});
+
+/* ============================================================
+   Render
+============================================================ */
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now() / 1000;
+
+  const elapsedL = now - entranceBaseTime - cfg.leftDelay;
+  const elapsedR = now - entranceBaseTime - cfg.rightDelay;
+  const progL = Math.max(0, Math.min(elapsedL / cfg.leftSpeed, 1));
+  const progR = Math.max(0, Math.min(elapsedR / cfg.rightSpeed, 1));
+  uniformsL.uProgress.value = progL;
+  uniformsR.uProgress.value = progR;
+  uniformsL.uTime.value = now;
+  uniformsR.uTime.value = now;
+
+  if (cfg.autoRotate) {
+    pivotL.rotation.y = now * 0.15;
+    pivotR.rotation.y = now * 0.15;
+  }
+
+  controls.update();
+
+  const w  = innerWidth;
+  const h  = innerHeight;
+  const hw = Math.floor(w / 2);
+
+  renderer.setScissorTest(true);
+
+  renderer.setViewport(0, 0, hw, h);
+  renderer.setScissor(0, 0, hw, h);
+  renderer.render(sceneL, camera);
+
+  renderer.setViewport(hw, 0, w - hw, h);
+  renderer.setScissor(hw, 0, w - hw, h);
+  renderer.render(sceneR, camera);
+
+  renderer.setScissorTest(false);
+}
+animate();
+
+/* ============================================================
+   Resize
+============================================================ */
+window.addEventListener('resize', () => {
+  camera.aspect = (innerWidth / 2) / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

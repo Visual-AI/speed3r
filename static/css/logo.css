@@ -1,0 +1,58 @@
+/* --- Fin3R Logo Styles --- */
+/* Import the Montserrat font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
+
+/* 
+  The main container for the logo. 
+  We'll add this class to the h1 tag.
+  It uses the Montserrat font and is set up for the text gradient.
+  NOTE: The font-size is now inherited from Bulma's ".title.is-1" class,
+  making it perfectly responsive with your existing layout.
+*/
+.logo-container {
+    font-family: 'Montserrat';
+    font-weight: 1200;
+    line-height: 1;
+    text-align: center;
+    /* This makes sure the spans are aligned correctly */
+    display: inline-block; 
+}
+
+/* The span that will be blurred */
+.blurry-part {
+    /* Apply the gradient as a background and clip it to the text */
+    background: linear-gradient(90deg, #2c2a74, #3bb5b5, #a8d87a);
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    
+    /* The blur effect. You can adjust this value! */
+    filter: blur(4px);
+    
+    /* A slight opacity change to enhance the effect */
+    opacity: 0.8;
+    
+    /* Animation for a subtle reveal effect */
+    animation: sharpen 2s ease-out forwards;
+}
+
+/* The span that will be sharp */
+.sharp-part {
+    /* Apply the rest of the gradient */
+    background: linear-gradient(90deg, #a8d87a, #f5964c, #c82f42);
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+/* Animation to make the blur fade away on load */
+@keyframes sharpen {
+    from {
+        filter: blur(10px);
+        opacity: 0.8;
+    }
+    to {
+        filter: blur(0px); /* Doesn't go to 0 to maintain the transition feel */
+        opacity: 1;
+    }
+}

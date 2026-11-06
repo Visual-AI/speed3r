@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Speed3R: Fine-Tuning Feed-Forward 3D Reconstruction Models via Monocular Knowledge Distillation">
+  <meta name="keywords" content="Speed3R, 3D Reconstruction, CVPR 2026 Findings">
+  <title>Speed3R</title>
+
+  <!-- --- Fonts & Icons --- -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+
+  <!-- --- CSS Frameworks --- -->
+  <link rel="stylesheet" href="./static/css/bootstrap-4.4.1.css">
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+
+  <!-- --- Custom CSS --- -->
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="stylesheet" href="./static/css/speedup-chart.css">
+  <link rel="stylesheet" href="./static/css/dics.original.css">
+  <!-- <link rel="icon" href="./static/images/logo.png"> -->
+
+  <!-- --- Analytics --- -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-PYVRSFMDRL');
+  </script>
+
+  <!-- --- Internal Styles (Logo & Thumbnails) --- -->
+  <style>
+    /* --- SPEED3R LOGO STYLES --- */
+    .speed3r-logo-container {
+      display: inline-block;
+      position: relative;
+      padding: 0 10px;
+    }
+    .speed3r-text {
+      font-family: 'Chakra Petch', sans-serif;
+      font-size: 3.5rem;
+      font-weight: 800;
+      font-style: italic;
+      line-height: 1;
+      letter-spacing: -2px;
+      transform: skewX(-12deg);
+      display: inline-flex;
+      align-items: center;
+      position: relative;
+    }
+    .s-part { color: #202124; position: relative; z-index: 5; }
+    .r-part { color: #0056b3; position: relative; margin-left: 2px; z-index: 5; }
+    
+    /* Glitch Effect Layers */
+    .r-part::before, .r-part::after {
+      content: "3R"; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0.7; background: white; mix-blend-mode: multiply;
+    }
+    .r-part::before {
+      color: #ff0055; z-index: -1;
+      animation: glitch-light-1 2.5s infinite linear alternate-reverse;
+    }
+    .r-part::after {
+      color: #00d0ff; z-index: -2;
+      animation: glitch-light-2 3s infinite linear alternate-reverse;
+    }
+
+    /* Speed Lines */
+    .speed-streak {
+      position: absolute; height: 2px; background: rgba(0, 86, 179, 0.2);
+      border-radius: 2px; z-index: 1; pointer-events: none;
+      animation: streak-anim 0.8s infinite linear;
+    }
+    .st1 { top: 30%; left: -20px; width: 40px; animation-delay: 0s; }
+    .st2 { top: 60%; left: -30px; width: 60px; animation-delay: 0.2s; background: rgba(0,0,0,0.1); }
+    .st3 { top: 45%; left: -10px; width: 30px; animation-delay: 0.5s; }
+
+    /* Animations */
+    @keyframes glitch-light-1 {
+      0% { clip-path: inset(20% 0 80% 0); transform: translate(-2px, 1px); }
+      5% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); }
+      10% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 2px); }
+      20% { clip-path: none; transform: translate(0); }
+      100% { clip-path: none; transform: translate(0); }
+    }
+    @keyframes glitch-light-2 {
+      0% { clip-path: inset(10% 0 60% 0); transform: translate(2px, -1px); }
+      5% { clip-path: inset(80% 0 5% 0); transform: translate(-2px, 2px); }
+      15% { clip-path: none; transform: translate(0); }
+      100% { clip-path: none; transform: translate(0); }
+    }
+    @keyframes streak-anim {
+      0% { transform: translateX(0) scaleX(0.5); opacity: 0; }
+      50% { opacity: 1; }
+      100% { transform: translateX(150px) scaleX(1.5); opacity: 0; }
+    }
+
+    /* --- THUMBNAIL STYLES --- */
+    .thumb-btn {
+      width: 70px; height: 70px; border-radius: 50%; border: 3px solid #e0e0e0;
+      overflow: hidden; cursor: pointer; transition: all 0.2s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb-btn:hover { transform: scale(1.1); border-color: #999; }
+    .thumb-btn.active { border-color: #3273dc; transform: scale(1.1); box-shadow: 0 4px 8px rgba(50, 115, 220, 0.3); }
+
+    /* --- TITLE HIGHLIGHT --- */
+    .speed-underline {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 4px;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ================= HEADER & TITLE ================= -->
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          
+          <!-- Logo -->
+          <h1 class="title is-1 publication-title" style="margin-bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <div class="speed3r-logo-container">
+              <div class="speed-streak st1"></div>
+              <div class="speed-streak st2"></div>
+              <div class="speed-streak st3"></div>
+              <div class="speed3r-text">
+                <span class="s-part">Speed</span>
+                <span class="r-part">3R</span>
+              </div>
+            </div>
+          </h1>          
+
+          <br>
+          <h2 class="title is-3 publication-title" style="margin-top: 0; margin-bottom: 0"><span class="speed-underline">Sp</span>arse F<span class="speed-underline">eed</span>-forward 3D Reconstruction Models</h2>
+          
+          <div class="cvpr2024" style="margin-top: 10px; margin-bottom: 20px;">
+            <h2 class="title is-4">CVPR 2026 Findings</h2>
+          </div>
+
+          <!-- Authors -->
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><a href="https://github.com/rwn17">Weining Ren</a><sup>1</sup></span>&nbsp;&nbsp;&nbsp;&nbsp;
+            <span class="author-block"><a href="https://tanxchong.github.io/">Xiao Tan</a><sup>2</sup></span>&nbsp;&nbsp;&nbsp;&nbsp;
+            <span class="author-block"><a href="https://www.kaihan.org/">Kai Han</a><sup>1</sup></span>&nbsp;&nbsp;&nbsp;&nbsp;
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>HKU</span>&nbsp;&nbsp;&nbsp;&nbsp;
+            <span class="author-block"><sup>2</sup>Baidu AMU</span>&nbsp;&nbsp;&nbsp;&nbsp;
+          </div>
+
+          <!-- Links -->
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2603.08055" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon"><i class="fas fa-file-pdf"></i></span>
+                  <span>Paper</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://github.com/Visual-AI/speed3r" class="external-link button is-normal is-rounded is-dark disabled">
+                  <span class="icon"><i class="fab fa-github"></i></span>
+                  <span>Code</span>
+                </a>
+              </span>  
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TEASER VIDEO ================= -->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <div style="width: 85%; max-width: 960px; margin: 0 auto; display: flex; justify-content: center; align-items: center;">
+        <video
+          src="./resources/particle_video.mp4"
+          autoplay
+          muted
+          loop
+          playsinline
+          controls
+          style="width: 100%; height: auto; display: block; border-radius: 8px;"
+        ></video>
+      </div>
+      <br><br><br>
+      <h2 class="subtitle has-text-centered">
+        Speed3R accelerate VGGT/Pi3 with trainable sparse attention.
+      </h2>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ABSTRACT ================= -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3" style="margin-top: -30px">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            While recent feed-forward 3D reconstruction models accelerate 3D reconstruction by jointly inferring dense geometry and camera poses in a single pass, their reliance on dense attention imposes a quadratic complexity, creating a computational bottleneck that severely limits inference speed. To resolve this, we introduce Speed3R, an end-to-end trainable model inspired by the core principle of Structure-from-Motion that a sparse set of keypoints is sufficient for robust estimation. Speed3R features a dual-branch attention mechanism where the compression branch creates a coarse contextual prior to guide the selection branch, which performs fine-grained attention only on the most informative image tokens. This strategy mimics the efficiency of traditional keypoint matching, achieving a remarkable 12.4x inference speedup on 1000-view sequences, while introducing a minimal, controlled trade-off in accuracy. Validated on standard benchmarks with both VGGT and \(\Pi^3\) backbones, our method delivers high-quality reconstructions at a fraction of computational cost, paving the way for efficient large-scale scene modeling.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= METHOD ================= -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3" style="margin-top: -20px">Method</h2>
+        <div style="width: 100%; margin: 0 auto; display: flex; justify-content: center;">
+          <img src="./resources/method.gif" style="width: 100%;" alt="Method Animation">
+        </div>
+        <div class="content has-text-justified">
+          <p style="margin-top: 30px">
+            Our model processes a sequence of input images through a shared feature encoder. The resulting tokens are then processed by a series of transformer blocks that alternate between local <b>Frame Attention</b> (within each view) and our proposed <b>Global Sparse Attention</b> (across all views). The GSA module efficiently integrates global information by decomposing attention into a <b>Compression Branch</b> for coarse context and a <b>Selection Branch</b> for fine-grained details, guided by a Top-k selection mechanism. Finally, updated tokens are passed to task-specific heads to predict camera pose and dense depth maps.   </p>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SPEEDUP CHART ================= -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div id="speedup-chart"></div>
+  </div>
+</section>
+
+<!-- ================= PERFORMANCE COMPARISON ================= -->
+<section class="section" id="performance-comparison-section" style="padding-bottom: 1.5rem;">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered" style="margin-top: -20px">Performance Comparison</h2>
+    <div style="width: 100%; overflow: hidden; border-radius: 12px;">
+      <iframe
+        id="performance-table-frame"
+        src="./table1.html"
+        title="Performance Comparison Charts"
+        loading="lazy"
+        scrolling="no"
+        style="width: 100%; height: 700px; border: none; background: transparent; display: block;"
+      ></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ================= MONOCULAR DEPTH ================= -->
+<!-- <section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered" style="margin-top: -30px">Monocular Depth Estimation</h2>
+        <img class="video" src="resources/monocular_depth.png" alt="Monocular Depth Estimation">
+        <div class="content has-text-justified">
+          <p>
+            Our fine-tuning method consistently improves the monocular depth estimation quality of various feed-forward 3D reconstruction models, including both two-view and multi-view, relative depth and metric depth models.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section> -->
+
+<!-- ================= MULTI-VIEW PERFORMANCE ================= -->
+<!-- <section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered" style="margin-top: -30px">Multi-view Performance</h2>
+        <div class="content has-text-justified">
+          <div style="width: 60%; margin: 0 auto; display: flex; justify-content: center;">
+            <img src="./resources/multi-view.png" style="width: 100%;" alt="Multi-view Performance">
+          </div>
+          <p>
+            Our fine-tuning method consistently improves the pose accuracy of various feed-forward 3D reconstruction models, even without pose supervision during training. This suggests that the decoder functions as an implicit feature matcher, leveraging the improved encoder features to enhance performance without requiring explicit pose labels.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section> -->
+
+<!-- ================= QUALITATIVE COMPARISON ================= -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3 has-text-centered" style="margin-top: -30px">Qualitative Comparison</h2>
+        <!-- <div class="content has-text-justified">
+          <p>Our fine-tuning method improves the fine details and robustness of baseline methods.</p>
+        </div> -->
+        <div style="width: 100%; height: 520px; overflow: hidden;">
+            <iframe src="./viewer.html" style="width: 100%; height: 100%; border: none;" scrolling="no"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <!-- <h2 class="title is-3 has-text-centered" style="margin-top: -30px">Qualitative Comparison</h2> -->
+        <!-- <div class="content has-text-justified">
+          <p>Our fine-tuning method improves the fine details and robustness of baseline methods.</p>
+        </div> -->
+        <div style="width: 100%; height: 520px; overflow: hidden;">
+            <iframe src="./viewer_2.html" style="width: 100%; height: 100%; border: none;" scrolling="no"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================= BIBTEX ================= -->
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@inproceedings{ren2026speed3r,
+  title={Speed3R: Sparse Feed-forward 3D Reconstruction Models},
+  author={Ren, Weining and Tan, Xiao and Han, Kai},
+  booktitle={arXiv preprint arXiv:2603.08055},
+  year={2026}
+}</code></pre>
+  </div>
+</section>
+
+<!-- ================= ACKNOWLEDGEMENTS ================= -->
+<section class="section" id="Acknowledgements">
+  <div class="container is-max-desktop content">
+    <h2 class="title">Acknowledgements</h2>
+    This work is supported by Hong Kong Research Grant Council - General Research Fund (Grant No. 17213825) and HKU Seed Fund for PI Research. The authors would like to thank Hongjun Wang for insightful discussions regarding kernel implementation, and Zhiheng Wu and Yumeng Zhang for generously sharing GPU resources during the computationally intensive phases of the experiments.  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content has-text-centered">
+          <p>
+            This website is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+            This webpage template is from <a href="https://github.com/autonomousvision/mip-splatting">mip-splatting</a>, which is built upon <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a>. 
+            We sincerely thank <a href="https://keunhong.com/">Keunhong Park</a> for developing and open-sourcing this template. Most of these animations are created by LLMs like Gemini, Claude, and ChatGPT.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ================= SCRIPTS ================= -->
+<!-- Core Libraries -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+<!-- Project Scripts -->
+<script defer src="./static/js/fontawesome.all.min.js"></script>
+<script src="./static/js/bulma-carousel.min.js"></script>
+<script src="./static/js/bulma-slider.min.js"></script>
+<script src="./static/js/index.js"></script>
+<script src="./static/js/app.js"></script>
+<script src="./static/js/video_comparison.js"></script>
+<script src="./static/js/event_handler.js"></script>
+<script src="./static/js/dics.original.js"></script>
+
+<!-- Inline Scripts Logic -->
+<script>
+  // --- Depth Scene Switcher ---
+  function changeDepthScene(sceneId, element) {
+      const frame = document.getElementById('depth-frame');
+      frame.contentWindow.postMessage({ type: 'setScene', sceneId: sceneId }, '*');
+
+      const allBtns = document.querySelectorAll('.thumb-btn');
+      allBtns.forEach(btn => btn.classList.remove('active'));
+
+      if (element) {
+          element.classList.add('active');
+      }
+  }
+</script>
+
+<script type="module">
+  // --- Speedup Chart Logic ---
+  import { createSpeedupChart } from './static/js/speedup-chart.js';
+
+  const chartConfig = {
+    labels: ['32', '64', '128', '256', '512', '1024'],
+    datasets: {
+      'Full Attn.':   { data: [0.50, 1.31, 3.97, 13.41, 50.01, 202.39], color: '#ef4444' },
+      'FastVGGT':     { data: [0.44, 0.88, 1.96,  4.95, 14.13,  45.49], color: '#22c55e' },
+      'Block Sparse': { data: [0.46, 0.85, 1.69,  3.77,  9.64,  29.58], color: '#f59e0b' },
+      'Ours':         { data: [0.37, 0.71, 1.44,  3.06,  6.83,  16.38], color: '#3b82f6' },
+    },
+    speedups: ['1.4×', '1.8×', '2.8×', '4.4×', '7.3×', '12.4×'],
+    title: 'Inference Time & Accelerating Speedup',
+    subtitle: 'Comparing mean latency (seconds) across sequence lengths.',
+    highlightText: 'The speedup gap widens significantly',
+    yAxisLabel: 'Latency (s)',
+    xAxisLabel: '# Images',
+    height: 490,
+    arrowDuration: 2200,
+  };
+
+  const container = document.querySelector('#speedup-chart');
+  
+  const initChart = () => {
+    if (!container) return;
+    container.innerHTML = '';
+    createSpeedupChart('#speedup-chart', chartConfig);
+  };
+
+  if (container) container.style.minHeight = `${chartConfig.height}px`;
+
+  if ('IntersectionObserver' in window && container) {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            initChart();
+            observer.unobserve(container);
+          }
+        });
+      }, { threshold: 0.35 });
+    observer.observe(container);
+  } else {
+    initChart();
+  }
+</script>
+
+<script>
+  // --- Performance Table Lazy Load with Handshake ---
+  (function () {
+    const frame = document.getElementById('performance-table-frame');
+    const section = document.getElementById('performance-comparison-section');
+    if (!frame || !section) return;
+
+    let hasTriggered = false;
+    let isFrameReady = false;
+    let hasEnteredViewport = false;
+    let readinessProbeInterval = null;
+
+    const clearReadinessProbe = () => {
+      if (!readinessProbeInterval) return;
+      clearInterval(readinessProbeInterval);
+      readinessProbeInterval = null;
+    };
+
+    const requestFrameReady = () => {
+      if (!frame.contentWindow) return;
+      frame.contentWindow.postMessage({ type: 'requestPerformanceChartsReady' }, '*');
+    };
+
+    const markFrameReady = () => {
+      isFrameReady = true;
+      clearReadinessProbe();
+      tryStart();
+    };
+
+    const tryStart = () => {
+      if (hasTriggered || !hasEnteredViewport || !isFrameReady || !frame.contentWindow) return;
+      frame.contentWindow.postMessage({ type: 'startPerformanceCharts' }, '*');
+      hasTriggered = true;
+      clearReadinessProbe();
+    };
+
+    // Listen for ready signal from iframe
+    window.addEventListener('message', (event) => {
+      if (event?.source !== frame.contentWindow) return;
+      if (event?.data?.type === 'performanceChartsReady') {
+        markFrameReady();
+      }
+    });
+
+    // Fallback: if ready message is missed, use iframe load signal.
+    frame.addEventListener('load', () => {
+      markFrameReady();
+      requestFrameReady();
+    });
+
+    // If iframe was already loaded before listeners were attached.
+    try {
+      if (frame.contentDocument?.readyState === 'complete') {
+        markFrameReady();
+      }
+    } catch (_) {
+      // Ignore cross-origin/readiness access issues.
+    }
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              hasEnteredViewport = true;
+              requestFrameReady();
+              if (!isFrameReady && !readinessProbeInterval) {
+                readinessProbeInterval = setInterval(requestFrameReady, 300);
+              }
+              tryStart();
+              observer.unobserve(section);
+            }
+          });
+        }, { threshold: 0.25 });
+      observer.observe(section);
+    } else {
+      hasEnteredViewport = true;
+      requestFrameReady();
+      if (!isFrameReady && !readinessProbeInterval) {
+        readinessProbeInterval = setInterval(requestFrameReady, 300);
+      }
+      tryStart();
+    }
+  })();
+</script>
+
+</body>
+</html>

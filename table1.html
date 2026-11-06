@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Comparison Charts</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --color-slate-50: #f8fafc;
+            --color-slate-100: #f1f5f9;
+            --color-slate-200: #e2e8f0;
+            --color-slate-500: #64748b;
+            --color-slate-800: #1e293b;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-slate-50);
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            border: 1px solid var(--color-slate-200);
+            padding: 24px;
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--color-slate-100);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .title-group h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-slate-800);
+            margin: 0;
+        }
+
+        .title-group p {
+            color: var(--color-slate-500);
+            font-size: 0.875rem;
+            margin: 4px 0 0 0;
+        }
+
+        .charts-container {
+            display: flex;
+            flex-direction: row;
+            gap: 32px;
+        }
+
+        .chart-wrapper {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+        }
+
+        /* SVG Styles */
+        svg {
+            width: 100%;
+            height: auto;
+            overflow: visible;
+        }
+
+        .axis path,
+        .axis line {
+            stroke: var(--color-slate-200);
+        }
+
+        .axis text {
+            font-family: monospace;
+            font-size: 11px;
+            fill: var(--color-slate-500);
+        }
+
+        .grid-line {
+            stroke: var(--color-slate-200);
+            stroke-dasharray: 4 4;
+            opacity: 0.5;
+        }
+
+        .axis-label {
+            font-size: 14px;
+            font-weight: 500;
+            fill: var(--color-slate-500);
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 700;
+            fill: var(--color-slate-800);
+        }
+
+        /* Legend */
+        .legend {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--color-slate-100);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 24px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .legend-text {
+            font-size: 0.875rem;
+            color: var(--color-slate-500);
+        }
+
+        .legend-text.bold {
+            font-weight: 700;
+            color: var(--color-slate-800);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="header">
+            <div class="title-group">
+                <h1>Performance Comparison</h1>
+                <p>Inference Time vs. AUC@30° on Tanks & Temples for VGGT and π³ Backbones</p>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div id="chart-left" class="chart-wrapper"></div>
+            <div id="chart-right" class="chart-wrapper"></div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #94a3b8;"></div>
+                <span class="legend-text">Full Attn.</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #f16d43;"></div>
+                <span class="legend-text">SAIL-Recon</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #74c476;"></div>
+                <span class="legend-text">FastVGGT</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #fdae61;"></div>
+                <span class="legend-text">BlockSparse</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #3f51b5;"></div>
+                <span class="legend-text bold">Speed3R (Ours)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Data ---
+        const rawData = [
+            // VGGT Family
+            { Method: "VGGT", Time: 34.51, AUC: 77.67, Family: "VGGT Family", Color: "#94a3b8" },
+            { Method: "FastVGGT (0.9)", Time: 15.98, AUC: 76.29, Family: "FastVGGT", Color: "#74c476" },
+            { Method: "FastVGGT (0.5)", Time: 20.56, AUC: 76.96, Family: "FastVGGT", Color: "#74c476" },
+            { Method: "Block Sparse-VGGT(0.5)", Time: 18.59, AUC: 76.45, Family: "Block Sparse VGGT", Color: "#fdae61" },
+            { Method: "Block Sparse-VGGT(0.9)", Time: 10.79, AUC: 74.15, Family: "Block Sparse VGGT", Color: "#fdae61" },
+            { Method: "Speed3R-VGGT(16)", Time: 6.09, AUC: 76.19, Family: "Speed3R VGGT", Color: "#3f51b5" },
+            { Method: "Speed3R-VGGT(32)", Time: 6.55, AUC: 76.57, Family: "Speed3R VGGT", Color: "#3f51b5" },
+            { Method: "Speed3R-VGGT(64)", Time: 7.13, AUC: 76.90, Family: "Speed3R VGGT", Color: "#3f51b5" },
+            { Method: "Speed3R-VGGT(128)", Time: 8.64, AUC: 77.17, Family: "Speed3R VGGT", Color: "#3f51b5" },
+            // Others
+            { Method: "SAIL-Recon (20 anchor)", Time: 20.35, AUC: 74.98, Family: "SAIL", Color: "#f16d43" },
+            { Method: "SAIL-Recon (50 anchor)", Time: 36.58, AUC: 75.54, Family: "SAIL", Color: "#f16d43" },
+            // Pi3 Family
+            { Method: "π³", Time: 22.32, AUC: 79.63, Family: "π³", Color: "#94a3b8" },
+            { Method: "FastVGGT-π³(0.5)", Time: 15.53, AUC: 79.16, Family: "π³ fastvggt", Color: "#74c476" },
+            { Method: "FastVGGT-π³(0.9)", Time: 11.96, AUC: 77.76, Family: "π³ fastvggt", Color: "#74c476" },
+            { Method: "Block Sparse-π³(0.5)", Time: 13.36, AUC: 78.05, Family: "π³ block sparse", Color: "#fdae61" },
+            { Method: "Block Sparse-π³(0.9)", Time: 8.16, AUC: 76.64, Family: "π³ block sparse", Color: "#fdae61" },
+            { Method: "Speed3R-π³(16)", Time: 3.92, AUC: 79.21, Family: "Speed3R Adaptation", Color: "#3f51b5" },
+            { Method: "Speed3R-π³(32)", Time: 4.19, AUC: 79.77, Family: "Speed3R Adaptation", Color: "#3f51b5" },
+            { Method: "Speed3R-π³(64)", Time: 4.64, AUC: 80.10, Family: "Speed3R Adaptation", Color: "#3f51b5" },
+            { Method: "Speed3R-π³(128)", Time: 6.07, AUC: 80.33, Family: "Speed3R Adaptation", Color: "#3f51b5" },
+        ];
+
+        // --- Helpers ---
+        const isPi3Family = (family) => ['π³', 'Adaptation'].some(k => family.includes(k));
+
+        const groupDataByFamily = (data) => {
+            const groups = {};
+            data.forEach(item => {
+                if (!groups[item.Family]) groups[item.Family] = [];
+                groups[item.Family].push(item);
+            });
+            Object.keys(groups).forEach(key => {
+                groups[key].sort((a, b) => a.Time - b.Time);
+            });
+            return groups;
+        };
+
+        // --- Chart Rendering Function ---
+        function createChart(containerId, data, config) {
+            // Clear previous chart
+            const container = d3.select(containerId);
+            container.html("");
+
+            const containerNode = container.node();
+            const width = Math.max(320, Math.floor(containerNode.getBoundingClientRect().width || 500));
+            const height = 400;
+            const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+
+            const svg = container
+                .append("svg")
+                .attr("viewBox", `0 0 ${width} ${height}`)
+                .append("g");
+
+            // Scales
+            const x = d3.scaleLinear()
+                .domain(config.xDomain)
+                .range([margin.left, width - margin.right]);
+
+            const y = d3.scaleLinear()
+                .domain(config.yDomain)
+                .range([height - margin.bottom, margin.top]);
+
+            // Grid Lines
+            // X Grid
+            svg.append("g")
+                .attr("class", "grid")
+                .selectAll("line")
+                .data(config.xTicks)
+                .enter()
+                .append("line")
+                .attr("class", "grid-line")
+                .attr("x1", d => x(d))
+                .attr("x2", d => x(d))
+                .attr("y1", margin.top)
+                .attr("y2", height - margin.bottom);
+
+            // Y Grid
+            svg.append("g")
+                .attr("class", "grid")
+                .selectAll("line")
+                .data(config.yTicks)
+                .enter()
+                .append("line")
+                .attr("class", "grid-line")
+                .attr("x1", margin.left)
+                .attr("x2", width - margin.right)
+                .attr("y1", d => y(d))
+                .attr("y2", d => y(d));
+
+            // Axes
+            const xAxis = d3.axisBottom(x).tickValues(config.xTicks).tickSize(0).tickPadding(10);
+            const yAxis = d3.axisLeft(y).tickValues(config.yTicks).tickSize(0).tickPadding(10);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(xAxis)
+                .call(g => g.select(".domain").attr("stroke", "#64748b").attr("stroke-width", 2));
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(yAxis)
+                .call(g => g.select(".domain").attr("stroke", "#64748b").attr("stroke-width", 2));
+
+            // Labels
+            // Title
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", 20)
+                .attr("text-anchor", "middle")
+                .attr("class", "chart-title")
+                .text(config.title);
+
+            // X Label
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .attr("class", "axis-label")
+                .text("Inference Time [s]");
+
+            // Y Label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 20)
+                .attr("x", 0 - (height / 2))
+                .attr("text-anchor", "middle")
+                .attr("class", "axis-label")
+                .text("AUC@30°");
+
+            // Plot Data
+            const grouped = groupDataByFamily(data);
+            let groupIndex = 0;
+
+            Object.entries(grouped).forEach(([family, items]) => {
+                const isOurs = family.includes('Speed3R');
+                const color = items[0].Color;
+
+                // Line generator
+                const line = d3.line()
+                    .x(d => x(d.Time))
+                    .y(d => y(d.AUC));
+
+                if (items.length > 1) {
+                    const path = svg.append("path")
+                        .datum(items)
+                        .attr("fill", "none")
+                        .attr("stroke", color)
+                        .attr("stroke-width", isOurs ? 3 : 1.5)
+                        .attr("stroke-dasharray", isOurs ? "0" : "5 5")
+                        .attr("d", line)
+                        .attr("opacity", isOurs ? 1 : 0.6);
+
+                    if (config.animate) {
+                        // Animate Line
+                        const totalLength = path.node().getTotalLength();
+                        path
+                            .attr("stroke-dasharray", totalLength + " " + totalLength)
+                            .attr("stroke-dashoffset", totalLength)
+                            .transition()
+                            .duration(1500)
+                            .delay(groupIndex * 200)
+                            .ease(d3.easeCubicInOut)
+                            .attr("stroke-dashoffset", 0)
+                            .on("end", function() {
+                                // Restore dashed style for non-ours after animation
+                                if (!isOurs) {
+                                    d3.select(this).attr("stroke-dasharray", "5 5");
+                                } else {
+                                    d3.select(this).attr("stroke-dasharray", "0");
+                                }
+                            });
+                    }
+                }
+
+                // Points
+                const points = svg.selectAll(`.dot-${groupIndex}`)
+                    .data(items)
+                    .enter()
+                    .append("circle")
+                    .attr("cx", d => x(d.Time))
+                    .attr("cy", d => y(d.AUC))
+                    .attr("r", 6)
+                    .attr("fill", color)
+                    .attr("stroke", "black")
+                    .attr("stroke-width", 0.5);
+
+                if (config.animate) {
+                    points
+                        .attr("opacity", 0) // Start hidden
+                        .transition()
+                        .duration(400)
+                        .delay((d, i) => groupIndex * 200 + (i * 100) + 500)
+                        .attr("opacity", 1);
+                } else {
+                    points.attr("opacity", 1);
+                }
+
+                groupIndex++;
+            });
+        }
+
+        function renderCharts({ animate = false } = {}) {
+            const vggtData = rawData.filter(d => !isPi3Family(d.Family));
+            const pi3Data = rawData.filter(d => isPi3Family(d.Family));
+
+            createChart("#chart-left", vggtData, {
+                animate,
+                title: "VGGT Backbone",
+                xDomain: [0, 40],
+                yDomain: [73.5, 78],
+                xTicks: [0, 10, 20, 30, 40],
+                yTicks: [74, 75, 76, 77, 78]
+            });
+
+            createChart("#chart-right", pi3Data, {
+                animate,
+                title: "π³ Backbone",
+                xDomain: [0, 25],
+                yDomain: [76, 80.5],
+                xTicks: [0, 5, 10, 15, 20, 25],
+                yTicks: [76, 77, 78, 79, 80]
+            });
+        }
+
+        let hasStarted = false;
+
+        function startChartsAnimation() {
+            if (hasStarted) return;
+            hasStarted = true;
+            renderCharts({ animate: true });
+        }
+
+        // If opened standalone, render immediately with animation.
+        if (window.top === window.self) {
+            startChartsAnimation();
+        }
+
+        // If embedded, wait for parent page signal to start animation.
+        window.addEventListener('message', (event) => {
+            if (event?.data?.type === 'startPerformanceCharts') {
+                startChartsAnimation();
+                return;
+            }
+
+            // Parent may poll for readiness in case initial ready message is missed.
+            if (event?.data?.type === 'requestPerformanceChartsReady' && window.top !== window.self) {
+                window.parent.postMessage({ type: 'performanceChartsReady' }, '*');
+            }
+        });
+
+        // Keep charts responsive after first render, without replaying animation.
+        window.addEventListener('resize', () => {
+            if (hasStarted) {
+                renderCharts({ animate: false });
+            }
+        });
+
+        // Signal to parent that we're ready to receive messages
+        if (window.top !== window.self) {
+            window.parent.postMessage({ type: 'performanceChartsReady' }, '*');
+        }
+
+    </script>
+</body>
+</html>
